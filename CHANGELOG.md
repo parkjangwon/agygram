@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 — 2026-07-13
+
+- Keep managed update scheduling path handling portable across POSIX and
+  Windows test hosts.
+
 ## 0.3.3 — 2026-07-13
 
 - Allow Telegram `/update` to recognize managed immutable release installs,

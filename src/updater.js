@@ -91,9 +91,14 @@ async function detectManagedInstallation(projectDir) {
   };
 }
 
-function managedInstallerArgs(installation) {
+function pathApiFor(platform) {
+  return platform === 'win32' ? path.win32 : path.posix;
+}
+
+function managedInstallerArgs(installation, { platform = process.platform } = {}) {
+  const pathApi = pathApiFor(platform);
   return [
-    path.join(installation.releaseDir, 'scripts', 'install.mjs'),
+    pathApi.join(installation.releaseDir, 'scripts', 'install.mjs'),
     '--install-root',
     installation.installRoot,
     '--config-file',
@@ -106,7 +111,7 @@ async function scheduleManagedUpdate(
   installation,
   { platform = process.platform, runCommand = run, spawnProcess = spawn } = {},
 ) {
-  const installerArgs = managedInstallerArgs(installation);
+  const installerArgs = managedInstallerArgs(installation, { platform });
   if (platform === 'linux') {
     const unit = `agygram-update-${Date.now()}-${process.pid}`;
     await runCommand('systemd-run', [
