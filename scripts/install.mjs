@@ -1351,6 +1351,16 @@ async function prepareRelease(installRoot, options, target) {
       '--no-audit',
       '--no-fund',
     ], { cwd: staging });
+    // The cross-platform OAuth terminal is a pinned native N-API package.
+    // Dependencies remain script-disabled by default; rebuild only this exact
+    // lockfile-pinned package after archive and tree validation.
+    await runCommand(process.execPath, ['--',
+      npmCli,
+      'rebuild',
+      '@homebridge/node-pty-prebuilt-multiarch',
+      '--no-audit',
+      '--no-fund',
+    ], { cwd: staging });
     await runCommand(
       process.execPath,
       ['--', path.join(staging, 'scripts', 'check.js')],

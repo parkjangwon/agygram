@@ -28,7 +28,7 @@ export class AuthManager {
     bin = 'agy',
     timeoutMs = 900_000,
     forceRemote = true,
-    transport = 'pipe',
+    transport = 'pty',
     environment = {},
   } = {}) {
     this.#bin = bin;
@@ -69,12 +69,9 @@ export class AuthManager {
 
     let child;
     try {
-      const useTmux = this.#transport === 'tmux';
-      if (useTmux && process.platform === 'win32') {
-        throw new Error('tmux OAuth transport is unavailable on Windows');
-      }
-      const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'auth-tmux.js');
-      child = spawn(useTmux ? process.execPath : this.#bin, useTmux
+      const usePty = this.#transport === 'pty';
+      const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'auth-pty.js');
+      child = spawn(usePty ? process.execPath : this.#bin, usePty
         ? [runner, this.#bin, cwd, '--', ...args]
         : args, {
         cwd,
