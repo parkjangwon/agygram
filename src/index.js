@@ -361,7 +361,7 @@ async function main() {
     bin: agyExecutable,
     timeoutMs: config.authTimeoutMs,
     forceRemote: config.authForceRemote,
-    transport: process.env.AGY_AUTH_TRANSPORT || 'pipe',
+    transport: process.env.AGY_AUTH_TRANSPORT || 'pty',
     environment: agyEnvironment,
   });
   runtimeAuth = auth;

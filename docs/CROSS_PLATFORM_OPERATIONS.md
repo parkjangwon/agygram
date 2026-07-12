@@ -28,15 +28,13 @@ node bin/agygram.js service uninstall
 
 `agy` 1.1.1 currently applies an internal 30-second limit to OAuth started via
 its non-interactive `--print` transport; increasing `AGY_AUTH_TIMEOUT_MS` does
-not change that limit. On a macOS or Linux server with `tmux` installed, set
-`AGY_AUTH_TRANSPORT=tmux` in the bot's private `.env` and restart the service.
-The bot then creates a short-lived, private TTY solely for `/auth` and relays
-its OAuth URL and code input through the allowed owner chat. The bridge selects
-Google OAuth, keeps optional interaction-data analytics disabled, accepts the
-displayed terms, trusts the bot's configured workspace, exits the temporary
-TTY, and proves the saved token with an actual headless request. Ordinary agent
-tasks remain direct, non-shell `agy` processes. Leave the variable unset when
-`tmux` is unavailable.
+not change that limit. The default `AGY_AUTH_TRANSPORT=pty` uses the packaged
+cross-platform pseudo-terminal backend on macOS, Linux, and Windows. It creates
+a short-lived private TTY solely for `/auth`, relays the OAuth URL and code
+through the owner chat, completes first-run onboarding with optional
+interaction-data analytics disabled, exits, and proves the saved token with an
+actual headless request. Ordinary agent tasks remain direct, non-shell `agy`
+processes.
 
 `doctor` checks configuration, Node/platform details, data/workspace access, POSIX `.env` privacy, safe executable resolution, `agy --version`, model catalog access, and the presence of a Linux D-Bus session variable. A model catalog result does not prove OAuth validity; `/auth` verifies it with a real plan-mode headless request. Native service installation reads control settings from the checkout's `.env` in a reduced preflight environment and requires `agy` to resolve to an absolute executable; do not rely on an interactive-only alias or relative command.
 
