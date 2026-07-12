@@ -3,7 +3,7 @@
 
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
-    $bootstrapVersion = '0.3.2'
+    $bootstrapVersion = '0.3.3'
     $programName = 'agygram'
     $temporaryDirectory = $null
     $isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT

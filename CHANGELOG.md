@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3 — 2026-07-13
+
+- Allow Telegram `/update` to recognize managed immutable release installs,
+  not only clean git checkouts.
+- Schedule managed release updates through the native service environment so
+  `/update apply` can move a service from one immutable release to the next.
+
 ## 0.3.2 — 2026-07-13
 
 - Add Telegram button-driven YOLO mode for explicitly enabled unsandboxed

@@ -47,7 +47,7 @@ agygram service status
 agygram setup
 ```
 
-Rerun the same install command any time to update or repair the managed installation. From a clean source checkout, owners can also use `/update` and `/update apply` in Telegram.
+Rerun the same install command any time to update or repair the managed installation. Owners can also use `/update` and `/update apply` in Telegram from a managed release install or a clean source checkout.
 
 ## Telegram Commands
 

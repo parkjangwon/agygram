@@ -47,7 +47,7 @@ agygram service status
 agygram setup
 ```
 
-같은 설치 명령을 다시 실행하면 업데이트 또는 복구가 됩니다. clean source checkout에서는 owner가 Telegram에서 `/update`, `/update apply`도 사용할 수 있습니다.
+같은 설치 명령을 다시 실행하면 업데이트 또는 복구가 됩니다. managed 릴리즈 설치본 또는 clean source checkout에서는 owner가 Telegram에서 `/update`, `/update apply`도 사용할 수 있습니다.
 
 ## Telegram 명령어
 

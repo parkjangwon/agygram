@@ -1794,8 +1794,15 @@ async function main() {
         await ctx.reply(`이미 최신 버전입니다. v${result.current}`);
         return;
       }
+      if (result.managed) {
+        const detail = result.scheduled?.unit
+          ? ` (${result.scheduled.unit})`
+          : '';
+        await ctx.reply(`v${result.version} managed 업데이트를 예약했습니다${detail}. 설치가 완료되면 서비스가 새 릴리즈로 재시작됩니다.`);
+        return;
+      }
       await ctx.reply(`v${result.version}을 검증·설치했습니다. 서비스를 재시작합니다.`);
-      setTimeout(() => process.exit(75), 300).unref?.();
+      if (result.restart !== false) setTimeout(() => process.exit(75), 300).unref?.();
     } catch (error) {
       await ctx.reply(`업데이트하지 않았습니다: ${error.message}`);
     }
