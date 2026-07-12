@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -263,9 +263,10 @@ test('loadConfig rejects inconsistent dedupe, journal, and pending-work limits',
 });
 
 test('managed storage paths stay strictly inside DATA_DIR without constraining workspace', () => {
-  const baseDir = '/srv/agygram';
-  const dataDir = '/srv/agygram/private-data';
-  const workspaceDir = '/srv/source/project';
+  const volumeRoot = path.parse(process.cwd()).root;
+  const baseDir = path.join(volumeRoot, 'srv', 'agygram');
+  const dataDir = path.join(baseDir, 'private-data');
+  const workspaceDir = path.join(volumeRoot, 'srv', 'source', 'project');
   const config = loadConfig({
     BOT_TOKEN: 'x',
     ALLOWED_CHAT_IDS: '1',
@@ -284,10 +285,11 @@ test('managed storage paths stay strictly inside DATA_DIR without constraining w
     config.resultsDir,
     config.agyRunLogDir,
   ]) {
-    const relative = path.posix.relative(dataDir, managedPath);
+    const relative = path.relative(dataDir, managedPath);
     assert.notEqual(relative, '');
-    assert.equal(relative.startsWith('../'), false);
-    assert.equal(path.posix.isAbsolute(relative), false);
+    assert.notEqual(relative, '..');
+    assert.equal(relative.startsWith(`..${path.sep}`), false);
+    assert.equal(path.isAbsolute(relative), false);
   }
 });
 
@@ -406,7 +408,10 @@ test('workspace validation resolves symlinks and blocks escapes', async () => {
   try {
     await Promise.all([mkdir(child, { recursive: true }), mkdir(outside, { recursive: true })]);
     const roots = await prepareWorkspaces(allowed, [allowed]);
-    assert.equal(await resolveWorkspace('child', { defaultWorkspace: allowed, allowedRoots: roots }), child);
+    assert.equal(
+      await resolveWorkspace('child', { defaultWorkspace: allowed, allowedRoots: roots }),
+      await realpath(child),
+    );
 
     const link = path.join(allowed, 'escape');
     await symlink(outside, link, process.platform === 'win32' ? 'junction' : 'dir');

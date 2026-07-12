@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -266,7 +266,7 @@ test('spawn spec carries cwd and only the caller-supplied environment into a rea
     });
 
     assert.deepEqual(result, {
-      cwd: root,
+      cwd: await realpath(root),
       marker: 'present',
       argument: hostile,
     });

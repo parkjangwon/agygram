@@ -123,6 +123,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     projectDir: '/home/me/My Bot',
     nodePath: '/usr/bin/node',
     homeDir: '/home/me',
+    env: {},
   });
   assert.equal(linux.definitionPath, '/home/me/.config/systemd/user/antigravity-telegram-cli.service');
   assert.match(linux.definition, /"--data-dir" "\/home\/me\/My Bot\/data"/);

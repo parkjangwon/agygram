@@ -8,8 +8,11 @@ import {
 } from '../src/environment.js';
 
 test('agy child environment fails closed for bot and cloud secrets', () => {
+  const safePath = process.platform === 'win32'
+    ? String.raw`C:\Windows\System32`
+    : '/bin';
   const env = buildAgyEnvironment({
-    PATH: '/bin',
+    PATH: safePath,
     HOME: '/home/bot',
     DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/dbus',
     SSH_AUTH_SOCK: '/run/user/1000/ssh-agent',
@@ -17,7 +20,7 @@ test('agy child environment fails closed for bot and cloud secrets', () => {
     AWS_SECRET_ACCESS_KEY: 'aws-secret',
     CUSTOM_BUILD_FLAG: 'enabled',
   });
-  assert.equal(env.PATH, '/bin');
+  assert.equal(env.PATH, safePath);
   assert.equal(env.DBUS_SESSION_BUS_ADDRESS, 'unix:path=/run/dbus');
   assert.equal(env.SSH_AUTH_SOCK, undefined);
   assert.equal(env.BOT_TOKEN, undefined);
