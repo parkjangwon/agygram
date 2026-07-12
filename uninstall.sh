@@ -158,8 +158,10 @@ import process from 'node:process';
 import { TextDecoder } from 'node:util';
 
 const OWNER = 'agygram-managed-installer';
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
-const PACKAGE = 'antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
+const PACKAGE = 'agygram';
+const LEGACY_REPOSITORIES = new Set([REPOSITORY, 'parkjangwon/antigravity-telegram-cli']);
+const LEGACY_PACKAGES = new Set([PACKAGE, 'antigravity-telegram-cli']);
 const SEMVER = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -189,7 +191,7 @@ function getJson(apiPath) {
       headers: {
         Accept: 'application/vnd.github+json',
         'Accept-Encoding': 'identity',
-        'User-Agent': 'agygram-uninstaller-bootstrap/0.1.3',
+        'User-Agent': 'agygram-uninstaller-bootstrap/0.3.0',
         'X-GitHub-Api-Version': '2022-11-28',
       },
     }, (response) => {
@@ -226,14 +228,14 @@ function getJson(apiPath) {
 }
 
 async function resolveTagCommit(tag) {
-  const reference = await getJson(`/repos/parkjangwon/antigravity-telegram-cli/git/ref/tags/${encodeURIComponent(tag)}`);
+  const reference = await getJson(`/repos/parkjangwon/agygram/git/ref/tags/${encodeURIComponent(tag)}`);
   if (reference?.ref !== `refs/tags/${tag}` || !reference.object) fail('release tag reference is invalid');
   let object = reference.object;
   for (let depth = 0; depth < 5; depth++) {
     if (!COMMIT.test(object?.sha ?? '')) fail('release tag has an invalid object ID');
     if (object.type === 'commit') return object.sha;
     if (object.type !== 'tag') fail('release tag does not resolve to a commit');
-    const annotated = await getJson(`/repos/parkjangwon/antigravity-telegram-cli/git/tags/${object.sha}`);
+    const annotated = await getJson(`/repos/parkjangwon/agygram/git/tags/${object.sha}`);
     if (depth === 0 && annotated?.tag !== tag) fail('annotated release tag name did not match');
     object = annotated?.object;
   }
@@ -249,7 +251,7 @@ function samePath(left, right) {
 }
 
 function assertIdentity(value, label) {
-  if (!value || value.schemaVersion !== 1 || value.owner !== OWNER || value.repository !== REPOSITORY) {
+  if (!value || value.schemaVersion !== 1 || value.owner !== OWNER || !LEGACY_REPOSITORIES.has(value.repository)) {
     fail(`${label} identity is invalid`);
   }
 }
@@ -361,7 +363,7 @@ async function main() {
   }
 
   const packageJson = await readJson(path.join(releaseDirectory, 'package.json'), 256 * 1024);
-  if (packageJson.name !== PACKAGE || packageJson.version !== manifest.version) {
+  if (!LEGACY_PACKAGES.has(packageJson.name) || packageJson.version !== manifest.version) {
     fail('installed package identity does not match the manifest');
   }
 
@@ -388,7 +390,7 @@ async function main() {
     fail('installed uninstaller does not match the installer inventory');
   }
   const release = await getJson(
-    `/repos/parkjangwon/antigravity-telegram-cli/releases/tags/${encodeURIComponent(manifest.tag)}`,
+    `/repos/parkjangwon/agygram/releases/tags/${encodeURIComponent(manifest.tag)}`,
   );
   if (release?.tag_name !== manifest.tag || release.draft !== false ||
       release.prerelease !== false || release.immutable !== true) {

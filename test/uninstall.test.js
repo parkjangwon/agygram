@@ -8,7 +8,7 @@ import test from 'node:test';
 import { uninstallManagedInstallation } from '../scripts/uninstall.mjs';
 
 const OWNER = 'agygram-managed-installer';
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
 const VERSION = '0.2.0';
 const COMMIT = 'a'.repeat(40);
 const RELEASE = `v${VERSION}-${COMMIT}`;
@@ -73,7 +73,7 @@ async function fixture(t, { serviceInstalled = true } = {}) {
     installedAt: NOW,
   })}\n`);
   await privateFile(path.join(releaseRoot, 'package.json'), `${JSON.stringify({
-    name: 'antigravity-telegram-cli',
+    name: 'agygram',
     version: VERSION,
     repository: { type: 'git', url: `git+https://github.com/${REPOSITORY}.git` },
   })}\n`);

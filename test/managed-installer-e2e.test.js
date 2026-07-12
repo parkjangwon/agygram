@@ -56,12 +56,12 @@ async function createFixtureArchive(root, version) {
     mkdir(destination, { recursive: true }),
   ]);
   const packageJson = {
-    name: 'antigravity-telegram-cli',
+    name: 'agygram',
     version,
     type: 'module',
     repository: {
       type: 'git',
-      url: 'git+https://github.com/parkjangwon/antigravity-telegram-cli.git',
+      url: 'git+https://github.com/parkjangwon/agygram.git',
     },
     bin: { agygram: 'bin/agygram.js' },
     files: ['bin', 'scripts', 'src', '.env.example', 'npm-shrinkwrap.json'],

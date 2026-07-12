@@ -26,7 +26,10 @@ import { fileURLToPath } from 'node:url';
 
 const SCHEMA_VERSION = 1;
 const OWNER = 'agygram-managed-installer';
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
+const LEGACY_REPOSITORIES = new Set([REPOSITORY, 'parkjangwon/antigravity-telegram-cli']);
+const PACKAGE_NAME = 'agygram';
+const LEGACY_PACKAGE_NAMES = new Set([PACKAGE_NAME, 'antigravity-telegram-cli']);
 const ROOT_MARKER_NAME = '.agygram-managed-root.json';
 const RELEASE_MARKER_NAME = '.agygram-release.json';
 const RELEASE_INVENTORY_NAME = '.agygram-release-inventory.json';
@@ -56,6 +59,14 @@ system keyring entries, and Linux linger setting are always preserved.
 
 function fail(message) {
   throw new Error(message);
+}
+
+function isKnownRepository(value) {
+  return LEGACY_REPOSITORIES.has(value);
+}
+
+function isKnownPackageName(value) {
+  return LEGACY_PACKAGE_NAMES.has(value);
 }
 
 function assertTestDependencies(dependencies) {
@@ -307,7 +318,7 @@ function validateRootMarker(marker, installRoot, platform = process.platform) {
   if (marker.schemaVersion !== SCHEMA_VERSION || marker.owner !== OWNER) {
     fail('install root is not owned by the agygram managed installer');
   }
-  if (marker.repository !== REPOSITORY) fail('install root repository receipt is invalid');
+  if (!isKnownRepository(marker.repository)) fail('install root repository receipt is invalid');
   assertAbsolutePath(marker.installRoot, 'root marker installRoot', platform);
   if (!samePath(marker.installRoot, installRoot, platform)) {
     fail('root marker does not match the selected install root');
@@ -339,7 +350,7 @@ function validateManifest(manifest, {
 } = {}) {
   if (manifest.schemaVersion !== SCHEMA_VERSION) fail('unsupported manifest schemaVersion');
   if (manifest.owner !== OWNER) fail('manifest owner is invalid');
-  if (manifest.repository !== REPOSITORY) fail('manifest repository is invalid');
+  if (!isKnownRepository(manifest.repository)) fail('manifest repository is invalid');
   if (!isStrictSemver(manifest.version)) {
     fail('manifest version is invalid');
   }
@@ -427,7 +438,7 @@ function validateTransaction(transaction, context) {
   if (
     transaction.schemaVersion !== SCHEMA_VERSION ||
     transaction.owner !== OWNER ||
-    transaction.repository !== REPOSITORY
+    !isKnownRepository(transaction.repository)
   ) {
     fail('managed installer transaction receipt is invalid');
   }
@@ -476,7 +487,7 @@ function validateTransaction(transaction, context) {
 function validateReleaseMarker(marker, releaseName, expectedCurrent) {
   if (marker.schemaVersion !== SCHEMA_VERSION) fail(`unsupported release marker: ${releaseName}`);
   if (marker.owner !== OWNER) fail(`release owner is invalid: ${releaseName}`);
-  if (marker.repository !== REPOSITORY) fail(`release repository is invalid: ${releaseName}`);
+  if (!isKnownRepository(marker.repository)) fail(`release repository is invalid: ${releaseName}`);
   if (!isStrictSemver(marker.version)) {
     fail(`release version is invalid: ${releaseName}`);
   }
@@ -503,7 +514,7 @@ function validateUninstallReceipt(receipt, manifest) {
   if (
     receipt.schemaVersion !== SCHEMA_VERSION ||
     receipt.owner !== OWNER ||
-    receipt.repository !== REPOSITORY ||
+    !isKnownRepository(receipt.repository) ||
     receipt.serviceAbsent !== true ||
     !isStrictSemver(receipt.version) ||
     !COMMIT.test(receipt.commit || '') ||
@@ -607,9 +618,9 @@ async function validateReleaseDirectory(releaseRoot, releaseName, {
       fail('current release package.json must contain an object');
     }
     if (
-      packageJson.name !== 'antigravity-telegram-cli' ||
+      !isKnownPackageName(packageJson.name) ||
       packageJson.version !== manifest.version ||
-      normalizeRepository(packageJson.repository) !== REPOSITORY
+      !isKnownRepository(normalizeRepository(packageJson.repository))
     ) {
       fail('current release package identity does not match the manifest');
     }
@@ -694,7 +705,7 @@ async function verifyReleaseInventory(releaseRoot, options = {}) {
   if (
     inventory.schemaVersion !== SCHEMA_VERSION ||
     inventory.owner !== OWNER ||
-    inventory.repository !== REPOSITORY ||
+    !isKnownRepository(inventory.repository) ||
     !Array.isArray(inventory.records)
   ) {
     fail(`managed release inventory is invalid: ${releaseRoot}`);

@@ -1,6 +1,6 @@
-# Antigravity Telegram CLI Bot
+# agygram
 
-[English](README.md) · [최신 릴리즈](https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest) · [설치 상세](docs/MANAGED_INSTALL.md)
+[English](README.md) · [최신 릴리즈](https://github.com/parkjangwon/agygram/releases/latest) · [설치 상세](docs/MANAGED_INSTALL.md)
 
 Google Antigravity CLI(`agy`)를 Telegram에서 제어하는 헤드리스 봇입니다. macOS, Linux, Windows에서 IDE 없이 운영할 수 있고, 최초 인증도 Telegram 안에서 끝나도록 설계했습니다.
 
@@ -11,13 +11,13 @@ Google Antigravity CLI(`agy`)를 Telegram에서 제어하는 헤드리스 봇입
 macOS 또는 Linux:
 
 ```sh
-(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'rm -f "$f"' 0 HUP INT TERM; curl -qfsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.sh && sh -n "$f" && sh "$f" --setup)
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'rm -f "$f"' 0 HUP INT TERM; curl -qfsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/agygram/releases/latest/download/install.sh && sh -n "$f" && sh "$f" --setup)
 ```
 
 Windows PowerShell:
 
 ```powershell
-& { $ErrorActionPreference = 'Stop'; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $d | Out-Null; $f = Join-Path $d 'install.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.ps1' -OutFile $f; powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f --setup; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+& { $ErrorActionPreference = 'Stop'; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $d | Out-Null; $f = Join-Path $d 'install.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -Uri 'https://github.com/parkjangwon/agygram/releases/latest/download/install.ps1' -OutFile $f; powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f --setup; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
 ```
 
 설정 마법사가 다음을 처리합니다.

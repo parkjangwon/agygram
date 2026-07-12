@@ -2,7 +2,7 @@
 
 set -eu
 
-BOOTSTRAP_VERSION=0.2.0
+BOOTSTRAP_VERSION=0.3.0
 PROGRAM_NAME=agygram
 TEMP_DIR=
 
@@ -98,7 +98,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const OWNER = 'parkjangwon';
-const REPOSITORY = 'antigravity-telegram-cli';
+const REPOSITORY = 'agygram';
 const API_ORIGIN = 'https://api.github.com';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_INSTALLER_BYTES = 4 * 1024 * 1024;
@@ -115,7 +115,7 @@ if (!temporaryDirectory || !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$
 
 const tag = `v${version}`;
 const installerName = 'install.mjs';
-const archiveName = `antigravity-telegram-cli-${version}.tgz`;
+const archiveName = `agygram-${version}.tgz`;
 const installerPath = path.join(temporaryDirectory, installerName);
 const archivePath = path.join(temporaryDirectory, archiveName);
 const metadataPath = path.join(temporaryDirectory, 'bootstrap-meta');
@@ -404,7 +404,7 @@ esac
 [ "${#archive_sha256}" -eq 64 ] || fail 'bootstrap returned an invalid archive digest'
 
 installer=$TEMP_DIR/install.mjs
-archive=$TEMP_DIR/antigravity-telegram-cli-$BOOTSTRAP_VERSION.tgz
+archive=$TEMP_DIR/agygram-$BOOTSTRAP_VERSION.tgz
 [ -f "$installer" ] || fail 'verified installer is missing'
 [ -f "$archive" ] || fail 'verified release archive is missing'
 

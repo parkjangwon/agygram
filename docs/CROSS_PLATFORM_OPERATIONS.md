@@ -97,7 +97,7 @@ Run the service as a dedicated, low-privilege account with access only to intend
 Service definition:
 
 ```text
-~/Library/LaunchAgents/dev.antigravity.telegram-cli.plist
+~/Library/LaunchAgents/dev.agygram.bot.plist
 ```
 
 Behavior:
@@ -125,7 +125,7 @@ If Keychain access prompts require UI or remain locked, fix the service account'
 Service definition:
 
 ```text
-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/antigravity-telegram-cli.service
+${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/agygram.service
 ```
 
 Behavior:
@@ -146,7 +146,7 @@ Status and logs:
 
 ```sh
 node bin/agygram.js service status
-journalctl --user -u antigravity-telegram-cli -f
+journalctl --user -u agygram -f
 ```
 
 ### Headless Linux credential persistence
@@ -162,7 +162,7 @@ Linux without systemd/logind—some containers, WSL configurations, and non-syst
 Stored definition copy (`DATA_DIR` is resolved to an absolute path at install time):
 
 ```text
-<absolute DATA_DIR>\runtime\service\antigravity-telegram-cli.xml
+<absolute DATA_DIR>\runtime\service\agygram.xml
 ```
 
 The same private runtime directory also holds a PATH/`NODE_ENV` snapshot
@@ -172,7 +172,7 @@ credentials.
 Task name:
 
 ```text
-Antigravity Telegram CLI
+agygram
 ```
 
 Behavior:

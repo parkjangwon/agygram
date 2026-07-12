@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-07-12
+
+- Rename the public project identity to `agygram`, including repository URLs,
+  package metadata, release asset names, documentation, and native service
+  labels.
+- Keep managed install, update, and uninstall compatible with legacy
+  `antigravity-telegram-cli` manifests and release markers.
+
 ## 0.2.0 — 2026-07-12
 
 - Add `agygram setup`, an interactive onboarding wizard that validates the

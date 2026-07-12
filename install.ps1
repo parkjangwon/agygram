@@ -3,7 +3,7 @@
 
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
-    $bootstrapVersion = '0.2.0'
+    $bootstrapVersion = '0.3.0'
     $programName = 'agygram'
     $temporaryDirectory = $null
     $isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
@@ -116,7 +116,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const OWNER = 'parkjangwon';
-const REPOSITORY = 'antigravity-telegram-cli';
+const REPOSITORY = 'agygram';
 const API_ORIGIN = 'https://api.github.com';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_INSTALLER_BYTES = 4 * 1024 * 1024;
@@ -133,7 +133,7 @@ if (!temporaryDirectory || !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$
 
 const tag = `v${version}`;
 const installerName = 'install.mjs';
-const archiveName = `antigravity-telegram-cli-${version}.tgz`;
+const archiveName = `agygram-${version}.tgz`;
 const installerPath = path.join(temporaryDirectory, installerName);
 const archivePath = path.join(temporaryDirectory, archiveName);
 const metadataPath = path.join(temporaryDirectory, 'bootstrap-meta');
@@ -417,7 +417,7 @@ main().catch((error) => {
         $commit = $metadata[0]
         $archiveSha256 = $metadata[1]
         $installer = Join-Path $temporaryDirectory 'install.mjs'
-        $archive = Join-Path $temporaryDirectory "antigravity-telegram-cli-$bootstrapVersion.tgz"
+        $archive = Join-Path $temporaryDirectory "agygram-$bootstrapVersion.tgz"
         if (-not (Test-Path -LiteralPath $installer -PathType Leaf) -or -not (Test-Path -LiteralPath $archive -PathType Leaf)) {
             Fail-Install 'verified release assets are missing'
         }

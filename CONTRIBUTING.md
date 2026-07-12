@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping make Antigravity Telegram CLI reliable on macOS, Windows,
+Thanks for helping make agygram reliable on macOS, Windows,
 and Linux.
 
 ## Development setup

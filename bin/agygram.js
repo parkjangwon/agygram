@@ -19,7 +19,7 @@ import { AGYGRAM_VERSION } from '../src/version.js';
 
 const PROJECT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const USAGE = `agygram — Antigravity Telegram CLI operations
+const USAGE = `agygram — agygram operations
 
 Usage:
   agygram setup [--config-file <path>] [--data-dir <path>] [--workspace-dir <path>] [--agy-bin <path>]

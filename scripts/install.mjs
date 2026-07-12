@@ -33,8 +33,10 @@ import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const OWNER = 'agygram-managed-installer';
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
-const PACKAGE_NAME = 'antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
+const PACKAGE_NAME = 'agygram';
+const LEGACY_REPOSITORIES = new Set([REPOSITORY, 'parkjangwon/antigravity-telegram-cli']);
+const LEGACY_PACKAGE_NAMES = new Set([PACKAGE_NAME, 'antigravity-telegram-cli']);
 const SCHEMA_VERSION = 1;
 const ROOT_MARKER = '.agygram-managed-root.json';
 const RELEASE_MARKER = '.agygram-release.json';
@@ -82,6 +84,14 @@ Options:
 
 function fail(message) {
   throw new Error(message);
+}
+
+function isKnownRepository(value) {
+  return LEGACY_REPOSITORIES.has(value);
+}
+
+function isKnownPackageName(value) {
+  return LEGACY_PACKAGE_NAMES.has(value);
 }
 
 function assertNodeVersion() {
@@ -395,7 +405,7 @@ function rootMarkerBody(installRoot) {
 
 function validateRootMarker(marker, installRoot) {
   if (!marker || marker.schemaVersion !== SCHEMA_VERSION || marker.owner !== OWNER ||
-      marker.repository !== REPOSITORY || marker.installRoot !== installRoot) {
+      !isKnownRepository(marker.repository) || marker.installRoot !== installRoot) {
     fail(`Install root is not owned by this installer: ${installRoot}`);
   }
 }
@@ -540,7 +550,7 @@ function releaseName(version, commit) {
 
 function validateManifest(manifest, installRoot, pointer) {
   if (!manifest || manifest.schemaVersion !== SCHEMA_VERSION || manifest.owner !== OWNER ||
-      manifest.repository !== REPOSITORY) {
+      !isKnownRepository(manifest.repository)) {
     fail(`Invalid managed manifest in ${installRoot}`);
   }
   if (!SEMVER_RE.test(manifest.version) || !COMMIT_RE.test(manifest.commit) ||
@@ -881,7 +891,7 @@ function parseTarGzip(archive) {
   const prefixes = new Set(rawEntries.map((entry) => entry.parts[0]));
   if (prefixes.size !== 1) fail('Release archive must have exactly one top-level directory');
   const prefix = [...prefixes][0];
-  if (prefix !== 'package' && !/^antigravity-telegram-cli-[0-9a-f]{7,40}$/u.test(prefix)) {
+  if (prefix !== 'package' && !/^(?:agygram|antigravity-telegram-cli)-[0-9a-f]{7,40}$/u.test(prefix)) {
     fail(`Unexpected release archive root: ${prefix}`);
   }
   const entries = [];
@@ -1124,7 +1134,7 @@ async function findNpmCli() {
 async function readCandidatePackage(candidate) {
   const packagePath = path.join(candidate, 'package.json');
   const packageJson = await readJsonFile(packagePath, { maxBytes: 256 * 1024 });
-  if (packageJson.name !== PACKAGE_NAME) fail(`Unexpected package name: ${packageJson.name}`);
+  if (!isKnownPackageName(packageJson.name)) fail(`Unexpected package name: ${packageJson.name}`);
   if (!SEMVER_RE.test(packageJson.version)) fail(`Candidate has invalid package version: ${packageJson.version}`);
   return packageJson;
 }
@@ -1270,7 +1280,7 @@ async function verifyReleaseInventory(root) {
     maxBytes: 16 * 1024 * 1024,
   });
   if (recorded.schemaVersion !== SCHEMA_VERSION || recorded.owner !== OWNER ||
-      recorded.repository !== REPOSITORY || !Array.isArray(recorded.records)) {
+      !isKnownRepository(recorded.repository) || !Array.isArray(recorded.records)) {
     fail('Managed release inventory is invalid');
   }
   const actual = await buildReleaseInventory(root);
@@ -1298,7 +1308,7 @@ async function validateReleaseMarker(releaseDir, expected) {
   if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) fail(`Invalid managed release directory: ${releaseDir}`);
   const marker = await readJsonFile(path.join(releaseDir, RELEASE_MARKER));
   if (marker.schemaVersion !== SCHEMA_VERSION || marker.owner !== OWNER ||
-      marker.repository !== REPOSITORY || marker.releaseName !== expected.releaseName ||
+      !isKnownRepository(marker.repository) || marker.releaseName !== expected.releaseName ||
       !SEMVER_RE.test(marker.version || '') || !COMMIT_RE.test(marker.commit || '') ||
       marker.releaseName !== releaseName(marker.version, marker.commit) ||
       (marker.tag != null && marker.tag !== `v${marker.version}`) ||
@@ -1900,7 +1910,7 @@ async function recoverInterruptedTransaction(installRoot, { invoke = invokeAgygr
   const journal = await readJsonFile(journalPath, { maxBytes: 2 * 1024 * 1024, optional: true });
   if (!journal) return;
   if (journal.schemaVersion !== SCHEMA_VERSION || journal.owner !== OWNER ||
-      journal.repository !== REPOSITORY ||
+      !isKnownRepository(journal.repository) ||
       !['prepared', 'old-service-stopped', 'state-written', 'new-service-started'].includes(journal.phase)) {
     fail('Interrupted-install transaction is invalid; refusing automatic recovery');
   }
@@ -2283,7 +2293,7 @@ async function main(argv = process.argv.slice(2)) {
       const entries = parseTarGzip(archive.body);
       const packageEntry = entries.find((entry) => entry.relative === 'package.json');
       const packageJson = JSON.parse(packageEntry.body.toString('utf8'));
-      if (packageJson.name !== PACKAGE_NAME || !SEMVER_RE.test(packageJson.version)) {
+      if (!isKnownPackageName(packageJson.name) || !SEMVER_RE.test(packageJson.version)) {
         fail('Commit archive contains an invalid package identity/version');
       }
       target = { ...target, version: packageJson.version, tag: null };

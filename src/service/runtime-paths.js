@@ -96,7 +96,7 @@ export function buildServiceRuntimePaths(dataDir, platform = process.platform) {
     serviceDir,
     environmentPath: pathApi.join(serviceDir, 'environment.json'),
     controlScriptPath: pathApi.join(serviceDir, 'task-control.ps1'),
-    definitionPath: pathApi.join(serviceDir, 'antigravity-telegram-cli.xml'),
+    definitionPath: pathApi.join(serviceDir, 'agygram.xml'),
     stopRequestPath: pathApi.join(serviceDir, 'stop.request.json'),
     logPath: pathApi.join(dataDir, 'logs', 'service.log'),
   };

@@ -1,16 +1,16 @@
 {
-  "name": "antigravity-telegram-cli",
-  "version": "0.2.0",
+  "name": "agygram",
+  "version": "0.3.0",
   "description": "Headless, cross-platform Telegram controller for Google Antigravity CLI",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/parkjangwon/antigravity-telegram-cli.git"
+    "url": "git+https://github.com/parkjangwon/agygram.git"
   },
   "bugs": {
-    "url": "https://github.com/parkjangwon/antigravity-telegram-cli/issues"
+    "url": "https://github.com/parkjangwon/agygram/issues"
   },
-  "homepage": "https://github.com/parkjangwon/antigravity-telegram-cli#readme",
+  "homepage": "https://github.com/parkjangwon/agygram#readme",
   "type": "module",
   "main": "src/index.js",
   "bin": {

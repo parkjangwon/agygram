@@ -91,7 +91,7 @@ if (pinnedStopRequestPath != null) {
   process.env.AGYGRAM_SERVICE_STOP_REQUEST_PATH = pinnedStopRequestPath;
 }
 
-const HELP_TEXT = `Antigravity Telegram CLI Bot
+const HELP_TEXT = `agygram
 
 일반 메시지를 보내면 현재 작업공간에서 agy headless 모드로 처리합니다.
 
@@ -870,7 +870,7 @@ async function main() {
           ? `모델 ${catalogStatus.models.length}개 조회됨`
           : '모델 조회 실패';
         await ctx.reply(
-          `Antigravity Telegram CLI Bot이 준비되었습니다.\nagy ${version} · ${readinessLine}\n` +
+          `agygram이 준비되었습니다.\nagy ${version} · ${readinessLine}\n` +
             `인증은 실제 요청 시 확인되며, 필요하면 /auth 를 실행하세요.\n작업공간: ${cwd}\n\n${HELP_TEXT}`,
         );
       });

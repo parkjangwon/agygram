@@ -6,7 +6,7 @@ const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
 module.exports = {
   apps: [
     {
-      name: 'antigravity-bot',
+      name: 'agygram',
       script: path.join(root, 'src', 'service', 'file-runner.js'),
       cwd: root,
       interpreter: process.execPath,

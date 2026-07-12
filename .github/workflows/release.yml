@@ -136,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          package_file="antigravity-telegram-cli-${version}.tgz"
+          package_file="agygram-${version}.tgz"
           mkdir dist
           npm pack --pack-destination dist --silent >/dev/null
           test -f "dist/${package_file}"
@@ -188,7 +188,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          package_file="antigravity-telegram-cli-${version}.tgz"
+          package_file="agygram-${version}.tgz"
 
           remote_refs="$(git ls-remote \
             "https://github.com/${GITHUB_REPOSITORY}.git" \
@@ -249,5 +249,5 @@ jobs:
           --repo "${GITHUB_REPOSITORY}"
           --verify-tag
           --target "${RELEASE_TARGET}"
-          --title "Antigravity Telegram CLI ${GITHUB_REF_NAME}"
+          --title "agygram ${GITHUB_REF_NAME}"
           --generate-notes

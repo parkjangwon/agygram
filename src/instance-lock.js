@@ -315,7 +315,7 @@ function isProcessAlive(pid, kill = process.kill) {
 
 function alreadyRunningError(lockPath, ownerPid) {
   return new InstanceLockError(
-    `Another antigravity-telegram-cli instance is already running (PID ${ownerPid}; lock: ${lockPath})`,
+    `Another agygram instance is already running (PID ${ownerPid}; lock: ${lockPath})`,
     { code: 'INSTANCE_ALREADY_RUNNING', lockPath, ownerPid },
   );
 }

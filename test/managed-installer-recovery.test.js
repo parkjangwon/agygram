@@ -8,11 +8,12 @@ import test from 'node:test';
 import { _private } from '../scripts/install.mjs';
 
 const OWNER = 'agygram-managed-installer';
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
+const LEGACY_REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
 
 test('managed installer parses setup mode as an explicit onboarding option', () => {
   const options = _private.parseOptions([
-    '--version', '0.2.0',
+    '--version', '0.3.0',
     '--commit', 'a'.repeat(40),
     '--setup',
     '--no-service',
@@ -20,16 +21,19 @@ test('managed installer parses setup mode as an explicit onboarding option', () 
 
   assert.equal(options.setup, true);
   assert.equal(options.noService, true);
-  assert.equal(options.version, '0.2.0');
+  assert.equal(options.version, '0.3.0');
 });
 
-function manifest(root, version, commit, configFile, { previousRelease = null } = {}) {
+function manifest(root, version, commit, configFile, {
+  previousRelease = null,
+  repository = REPOSITORY,
+} = {}) {
   const currentRelease = `v${version}-${commit}`;
   const launcherDir = path.join(root, 'bin');
   return {
     schemaVersion: 1,
     owner: OWNER,
-    repository: REPOSITORY,
+    repository,
     version,
     tag: `v${version}`,
     commit,
@@ -66,16 +70,19 @@ test('state-written journal converges to previous config and pointer', async () 
     const before = 'BOT_TOKEN=before\n';
     const after = 'BOT_TOKEN=after\n';
     await writeFile(configFile, after, { mode: 0o600 });
-    const previous = manifest(root, '0.1.0', 'a'.repeat(40), configFile);
+    const previous = manifest(root, '0.1.0', 'a'.repeat(40), configFile, {
+      repository: LEGACY_REPOSITORY,
+    });
     const target = manifest(root, '0.2.0', 'b'.repeat(40), configFile, {
       previousRelease: previous.currentRelease,
+      repository: LEGACY_REPOSITORY,
     });
     await writeFile(path.join(root, 'manifest.json'), `${JSON.stringify(target)}\n`);
     await writeFile(path.join(root, 'current'), `${target.currentRelease}\n`);
     await writeFile(path.join(root, 'transaction.json'), `${JSON.stringify({
       schemaVersion: 1,
       owner: OWNER,
-      repository: REPOSITORY,
+      repository: LEGACY_REPOSITORY,
       phase: 'state-written',
       previousManifest: previous,
       targetManifest: target,

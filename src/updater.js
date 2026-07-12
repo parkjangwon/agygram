@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { AGYGRAM_VERSION } from './version.js';
 
 const execFileAsync = promisify(execFile);
-const REPOSITORY = 'parkjangwon/antigravity-telegram-cli';
+const REPOSITORY = 'parkjangwon/agygram';
 const REMOTE = `https://github.com/${REPOSITORY}.git`;
 
 function run(file, args, cwd) {

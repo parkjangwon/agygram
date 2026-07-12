@@ -1,6 +1,6 @@
-# Antigravity Telegram CLI Bot
+# agygram
 
-[한국어](README.ko.md) · [Latest release](https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest) · [Install details](docs/MANAGED_INSTALL.md)
+[한국어](README.ko.md) · [Latest release](https://github.com/parkjangwon/agygram/releases/latest) · [Install details](docs/MANAGED_INSTALL.md)
 
 Run Google Antigravity CLI (`agy`) from Telegram on macOS, Linux, or Windows. It is built for headless servers: no IDE, no desktop session for daily use, and first authentication happens from Telegram.
 
@@ -11,13 +11,13 @@ Before you start, create a Telegram bot with [@BotFather](https://t.me/BotFather
 macOS or Linux:
 
 ```sh
-(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'rm -f "$f"' 0 HUP INT TERM; curl -qfsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.sh && sh -n "$f" && sh "$f" --setup)
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'rm -f "$f"' 0 HUP INT TERM; curl -qfsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/agygram/releases/latest/download/install.sh && sh -n "$f" && sh "$f" --setup)
 ```
 
 Windows PowerShell:
 
 ```powershell
-& { $ErrorActionPreference = 'Stop'; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $d | Out-Null; $f = Join-Path $d 'install.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.ps1' -OutFile $f; powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f --setup; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+& { $ErrorActionPreference = 'Stop'; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $d | Out-Null; $f = Join-Path $d 'install.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -Uri 'https://github.com/parkjangwon/agygram/releases/latest/download/install.ps1' -OutFile $f; powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f --setup; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
 ```
 
 The setup wizard will:

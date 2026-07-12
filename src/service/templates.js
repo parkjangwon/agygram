@@ -1,8 +1,8 @@
 import path from 'node:path';
 
-export const SERVICE_NAME = 'antigravity-telegram-cli';
-export const LAUNCHD_LABEL = 'dev.antigravity.telegram-cli';
-export const WINDOWS_TASK_NAME = 'Antigravity Telegram CLI';
+export const SERVICE_NAME = 'agygram';
+export const LAUNCHD_LABEL = 'dev.agygram.bot';
+export const WINDOWS_TASK_NAME = 'agygram';
 
 export function buildWindowsTaskControlScript() {
   return `param(
@@ -396,7 +396,7 @@ export function buildSystemdUnit({
     .join(' ');
 
   return `[Unit]
-Description=Antigravity Telegram CLI Bot
+Description=agygram
 Wants=network-online.target
 After=network-online.target
 

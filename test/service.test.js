@@ -124,7 +124,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
       (item) => path.posix.basename(item.file || '') === 'launchctl' &&
         item.args[0] === 'bootstrap',
     ).args,
-    ['bootstrap', 'gui/501', '/Users/me/Library/LaunchAgents/dev.antigravity.telegram-cli.plist'],
+    ['bootstrap', 'gui/501', '/Users/me/Library/LaunchAgents/dev.agygram.bot.plist'],
   );
 
   const linux = buildServicePlan('install', {
@@ -135,7 +135,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     envFile: '/home/me/.config/agygram/bot.env',
     env: { PATH: process.env.PATH },
   });
-  assert.equal(linux.definitionPath, '/home/me/.config/systemd/user/antigravity-telegram-cli.service');
+  assert.equal(linux.definitionPath, '/home/me/.config/systemd/user/agygram.service');
   assert.match(linux.definition, /ExecStart="\/usr\/bin\/node" "--"/);
   assert.match(linux.definition, /"--data-dir" "\/home\/me\/My Bot\/data"/);
   assert.match(linux.definition, /"--config-file" "\/home\/me\/\.config\/agygram\/bot\.env"/);
@@ -148,13 +148,13 @@ test('all three install plans use absolute native paths and argv arrays', () => 
   assert.deepEqual(restart.args, [
     '--user',
     'restart',
-    'antigravity-telegram-cli.service',
+    'agygram.service',
   ]);
   assert.deepEqual(linux.operations.at(-1).args, [
     '--user',
     'is-active',
     '--quiet',
-    'antigravity-telegram-cli.service',
+    'agygram.service',
   ]);
   assert.ok(linux.operations.some(
     (item) => path.posix.basename(item.file || '') === 'loginctl',
@@ -174,7 +174,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
   const create = windows.operations.find(
     (item) => path.win32.basename(item.file || '').toLowerCase() === 'schtasks.exe' && item.args[0] === '/Create',
   );
-  assert.deepEqual(create.args.slice(0, 3), ['/Create', '/TN', 'Antigravity Telegram CLI']);
+  assert.deepEqual(create.args.slice(0, 3), ['/Create', '/TN', 'agygram']);
   assert.equal(create.args.at(-1), '/F');
   const pinnedEnvironment = windows.operations.find(
     (item) => item.type === 'write' && item.path.endsWith('environment.json'),
@@ -207,7 +207,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
   assert.doesNotMatch(windows.definition, /--env-file/);
   assert.equal(
     windows.definitionPath,
-    'D:\\Private Bot Data\\runtime\\service\\antigravity-telegram-cli.xml',
+    'D:\\Private Bot Data\\runtime\\service\\agygram.xml',
   );
   assert.ok(
     windows.operations.indexOf(stop) < windows.operations.indexOf(create),
@@ -246,7 +246,7 @@ test('POSIX uninstall plans narrowly classify already-absent native services', (
   });
   const bootout = mac.operations.find((item) => item.args?.[0] === 'bootout');
   assert.equal(bootout.absentService, 'launchd');
-  assert.equal(bootout.serviceName, 'dev.antigravity.telegram-cli');
+  assert.equal(bootout.serviceName, 'dev.agygram.bot');
   assert.deepEqual(bootout.envOverrides, { LANG: 'C', LC_ALL: 'C' });
 
   const linux = buildServicePlan('uninstall', {
@@ -257,7 +257,7 @@ test('POSIX uninstall plans narrowly classify already-absent native services', (
   });
   const disable = linux.operations.find((item) => item.args?.includes('disable'));
   assert.equal(disable.absentService, 'systemd');
-  assert.equal(disable.serviceName, 'antigravity-telegram-cli.service');
+  assert.equal(disable.serviceName, 'agygram.service');
   assert.deepEqual(disable.envOverrides, { LANG: 'C', LC_ALL: 'C' });
   assert.equal(
     linux.operations.find((item) => item.args?.includes('daemon-reload')).absentService,
@@ -271,9 +271,9 @@ test('POSIX uninstall continues only for manager-confirmed absence', async () =>
       operation: {
         type: 'command',
         file: '/bin/launchctl',
-        args: ['bootout', 'gui/501/dev.antigravity.telegram-cli'],
+        args: ['bootout', 'gui/501/dev.agygram.bot'],
         absentService: 'launchd',
-        serviceName: 'dev.antigravity.telegram-cli',
+        serviceName: 'dev.agygram.bot',
         envOverrides: { LANG: 'C', LC_ALL: 'C' },
       },
       error: Object.assign(new Error('launchctl failed'), {
@@ -286,15 +286,15 @@ test('POSIX uninstall continues only for manager-confirmed absence', async () =>
       operation: {
         type: 'command',
         file: '/usr/bin/systemctl',
-        args: ['--user', 'disable', '--now', 'antigravity-telegram-cli.service'],
+        args: ['--user', 'disable', '--now', 'agygram.service'],
         absentService: 'systemd',
-        serviceName: 'antigravity-telegram-cli.service',
+        serviceName: 'agygram.service',
         envOverrides: { LANG: 'C', LC_ALL: 'C' },
       },
       error: Object.assign(new Error('systemctl failed'), {
         exitCode: 1,
         stdout: '',
-        stderr: 'Failed to disable unit: Unit file antigravity-telegram-cli.service does not exist.\n',
+        stderr: 'Failed to disable unit: Unit file agygram.service does not exist.\n',
       }),
     },
   ];
@@ -332,9 +332,9 @@ test('POSIX uninstall surfaces permission, executable, signal, and ambiguous err
   const operation = {
     type: 'command',
     file: '/usr/bin/systemctl',
-    args: ['--user', 'disable', '--now', 'antigravity-telegram-cli.service'],
+    args: ['--user', 'disable', '--now', 'agygram.service'],
     absentService: 'systemd',
-    serviceName: 'antigravity-telegram-cli.service',
+    serviceName: 'agygram.service',
     envOverrides: { LANG: 'C', LC_ALL: 'C' },
   };
   const failures = [
@@ -380,7 +380,7 @@ test('POSIX uninstall surfaces permission, executable, signal, and ambiguous err
         ...operation,
         file: '/bin/launchctl',
         absentService: 'launchd',
-        serviceName: 'dev.antigravity.telegram-cli',
+        serviceName: 'dev.agygram.bot',
       }],
     }, { runner: async () => { throw launchdAmbiguity; } }),
     launchdAmbiguity,
@@ -402,7 +402,7 @@ test('plan formatting is diagnostic only and execution passes argv without a she
   });
   assert.deepEqual(calls, [{
     file: plan.managerExecutables.systemctl,
-    args: ['--user', 'status', 'antigravity-telegram-cli.service', '--no-pager', '--full'],
+    args: ['--user', 'status', 'agygram.service', '--no-pager', '--full'],
     options: { stdio: 'inherit' },
   }]);
 });
@@ -893,7 +893,7 @@ test('Linux service definition honors XDG_CONFIG_HOME and pins DATA_DIR', () => 
   });
   assert.equal(
     plan.definitionPath,
-    '/home/service/.xdg-config/systemd/user/antigravity-telegram-cli.service',
+    '/home/service/.xdg-config/systemd/user/agygram.service',
   );
   assert.match(plan.definition, /"--data-dir" "\/var\/lib\/agygram-user"/);
 });
