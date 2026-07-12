@@ -28,7 +28,7 @@ export class AuthManager {
     bin = 'agy',
     timeoutMs = 900_000,
     forceRemote = true,
-    transport = 'pty',
+    transport = 'pipe',
     environment = {},
   } = {}) {
     this.#bin = bin;
