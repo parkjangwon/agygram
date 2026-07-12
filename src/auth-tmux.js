@@ -35,6 +35,7 @@ const command = [agyBin, ...interactiveArgs].map(quote).join(' ');
 let lastOutput = '';
 let ended = false;
 let sawFailure = false;
+let loginMethodSelected = false;
 
 async function tmuxCommand(args, options = {}) {
   return execFileAsync(tmux, args, {
@@ -73,6 +74,10 @@ async function poll() {
         sawFailure = true;
       }
       process.stdout.write(`${output}\n`);
+      if (!loginMethodSelected && /select login method/i.test(output)) {
+        loginMethodSelected = true;
+        tmuxCommand(['send-keys', '-t', session, 'Enter']).catch(() => {});
+      }
     }
   } catch {
     await finish(sawFailure ? 1 : 0);
@@ -87,7 +92,11 @@ process.stdin.on('data', (chunk) => {
   pendingInput = lines.pop();
   for (const line of lines) {
     const code = line.replace(/[\r\n\0]/g, '').slice(0, 4096);
-    if (!code || ended) continue;
+    if (ended) continue;
+    if (!code) {
+      tmuxCommand(['send-keys', '-t', session, 'Enter']).catch(() => {});
+      continue;
+    }
     tmuxCommand(['send-keys', '-t', session, '-l', code])
       .then(() => tmuxCommand(['send-keys', '-t', session, 'Enter']))
       .catch(() => {});
@@ -104,12 +113,6 @@ try {
   await tmuxCommand([
     'new-session', '-d', '-s', session, '-x', '120', '-y', '32', '-c', cwd, '--', command,
   ]);
-  // The default selection is Google OAuth. Sending one key after the TUI has
-  // rendered avoids depending on ANSI screen parsing and never reaches agy as
-  // part of a user prompt.
-  setTimeout(() => {
-    tmuxCommand(['send-keys', '-t', session, 'Enter']).catch(() => {});
-  }, 400).unref?.();
 } catch (error) {
   console.error(`Unable to start tmux OAuth transport: ${error.message}`);
   process.exitCode = 1;
