@@ -10,21 +10,41 @@ import {
   assertManagedStorageBoundary,
   assertRuntimeFilesystemTrust,
 } from './runtime-trust.js';
+import {
+  parseFileRunnerArguments,
+  resolveRuntimeEnvFile,
+} from './service/runtime-paths.js';
 import { prepareWorkspaces, resolveWorkspace } from './workspace.js';
+import { AGYGRAM_VERSION } from './version.js';
 
 async function doctor() {
+  const runtimeArguments = parseFileRunnerArguments(process.argv.slice(2));
+  const pinnedServicePath = runtimeArguments.dataDir ? process.env.PATH : undefined;
+  const runtimeEnvFile = resolveRuntimeEnvFile({
+    projectDir: process.cwd(),
+    configuredEnvFile: runtimeArguments.envFile,
+  });
   const checks = [];
   const add = (name, ok, detail) => checks.push({ name, ok, detail });
   let envTrustError = null;
   if (process.platform !== 'win32') {
     try {
-      await assertRuntimeFilesystemTrust({ envFile: path.resolve('.env'), dataDirectories: [] });
+      await assertRuntimeFilesystemTrust({ envFile: runtimeEnvFile, dataDirectories: [] });
     } catch (error) {
       envTrustError = error;
     }
   }
   // Do not evaluate a POSIX .env after its path failed the trust preflight.
-  if (!envTrustError || process.platform === 'win32') dotenv.config({ quiet: true });
+  if (!envTrustError || process.platform === 'win32') {
+    const environmentResult = dotenv.config({
+      path: runtimeEnvFile,
+      override: runtimeArguments.envFile != null,
+      quiet: true,
+    });
+    if (runtimeArguments.envFile && environmentResult.error) throw environmentResult.error;
+  }
+  if (runtimeArguments.dataDir) process.env.DATA_DIR = runtimeArguments.dataDir;
+  if (pinnedServicePath != null) process.env.PATH = pinnedServicePath;
   let config;
   try {
     config = loadConfig();
@@ -34,33 +54,40 @@ async function doctor() {
   }
 
   const nodeMajor = Number(process.versions.node.split('.')[0]);
+  add('agygram', true, `v${AGYGRAM_VERSION}`);
   add('Node.js', [22, 24].includes(nodeMajor), `${process.version} · ${process.platform}/${process.arch}`);
 
   if (process.platform !== 'win32') {
     if (envTrustError) {
-      add('.env 권한', false, envTrustError.message);
+      add('환경 파일 권한', false, envTrustError.message);
     } else try {
-      const info = await lstat('.env');
+      const info = await lstat(runtimeEnvFile);
       const privateMode = (info.mode & 0o077) === 0;
       add(
-        '.env 권한',
+        '환경 파일 권한',
         info.isFile() && !info.isSymbolicLink() && privateMode,
         info.isSymbolicLink()
           ? '심볼릭 링크는 허용하지 않습니다'
           : privateMode
-            ? `0${(info.mode & 0o777).toString(8)}`
-            : `현재 0${(info.mode & 0o777).toString(8)} · chmod 600 .env 필요`,
+            ? `${runtimeEnvFile} · 0${(info.mode & 0o777).toString(8)}`
+            : `현재 0${(info.mode & 0o777).toString(8)} · chmod 600 ${runtimeEnvFile} 필요`,
       );
     } catch (error) {
-      add('.env 권한', error.code === 'ENOENT', error.code === 'ENOENT' ? '.env 없이 프로세스 환경 사용' : error.message);
+      add(
+        '환경 파일 권한',
+        error.code === 'ENOENT',
+        error.code === 'ENOENT'
+          ? `${runtimeEnvFile} 없이 프로세스 환경 사용`
+          : error.message,
+      );
     }
   } else if (config) {
     add(
       'Windows ACL 확인',
       config.windowsAclVerified,
       config.windowsAclVerified
-        ? 'WINDOWS_ACL_VERIFIED=true (운영자가 .env와 DATA_DIR DACL을 확인함)'
-        : 'icacls로 .env와 DATA_DIR을 현재 사용자 전용으로 제한한 뒤 WINDOWS_ACL_VERIFIED=true를 설정하세요',
+        ? `WINDOWS_ACL_VERIFIED=true (운영자가 ${runtimeEnvFile}와 DATA_DIR DACL을 확인함)`
+        : `icacls로 ${runtimeEnvFile}와 DATA_DIR을 현재 사용자 전용으로 제한한 뒤 WINDOWS_ACL_VERIFIED=true를 설정하세요`,
     );
   }
   if (!config) return print(checks);
@@ -95,7 +122,7 @@ async function doctor() {
       directories: managedDataDirectories,
     });
     await assertRuntimeFilesystemTrust({
-      envFile: path.resolve('.env'),
+      envFile: runtimeEnvFile,
       dataDirectories: managedDataDirectories,
       dataFiles: managedDataFiles,
       windowsAclVerified: config.windowsAclVerified,

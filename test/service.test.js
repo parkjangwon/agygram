@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -11,6 +12,7 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import test from 'node:test';
 
 import {
@@ -37,6 +39,8 @@ import {
   rotateLogFile,
 } from '../src/service/file-console.js';
 
+const execFileAsync = promisify(execFile);
+
 test('launchd plist preserves tokenized paths and XML-escapes special characters', () => {
   const plist = buildLaunchdPlist({
     nodePath: '/Users/me/Node & Tools/node',
@@ -47,6 +51,7 @@ test('launchd plist preserves tokenized paths and XML-escapes special characters
     stderrPath: '/tmp/error.log',
   });
   assert.match(plist, /<string>\/Users\/me\/Node &amp; Tools\/node<\/string>/);
+  assert.match(plist, /<string>\/Users\/me\/Node &amp; Tools\/node<\/string>\s*<string>--<\/string>/);
   assert.match(plist, /<string>\/Users\/me\/My &lt;Bot&gt;\/src\/index\.js<\/string>/);
   assert.match(plist, /<string>--data-dir<\/string>\s*<string>\/Users\/me\/Data &amp; State<\/string>/);
   assert.match(plist, /<key>SuccessfulExit<\/key>\s*<false\/>/);
@@ -67,7 +72,7 @@ test('systemd unit quotes spaces, specifiers, dollars, and backslashes without a
   });
   assert.match(
     unit,
-    /ExecStart="\/opt\/Node Tools\/node" "\/srv\/Bot %%i\/\$\$entry\/index\.js" "--data-dir" "\/srv\/State %%s\/\$\$data"/,
+    /ExecStart="\/opt\/Node Tools\/node" "--" "\/srv\/Bot %%i\/\$\$entry\/index\.js" "--data-dir" "\/srv\/State %%s\/\$\$data"/,
   );
   assert.match(unit, /WorkingDirectory="\/srv\/Bot \$HOME"/);
   assert.match(unit, /Restart=on-failure/);
@@ -92,7 +97,7 @@ test('Windows task XML is least privilege, restartable, and path-safe', () => {
   assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
   assert.match(xml, /<MultipleInstancesPolicy>IgnoreNew<\/MultipleInstancesPolicy>/);
   assert.match(xml, /<Command>C:\\Program Files\\nodejs\\node\.exe<\/Command>/);
-  assert.match(xml, /<Arguments>&quot;C:\\Users\\A &amp; B\\bot\\src\\index\.js&quot; --data-dir &quot;D:\\Bot State&quot;<\/Arguments>/);
+  assert.match(xml, /<Arguments>-- &quot;C:\\Users\\A &amp; B\\bot\\src\\index\.js&quot; --data-dir &quot;D:\\Bot State&quot;<\/Arguments>/);
   assert.match(xml, /<WorkingDirectory>C:\\Users\\A &amp; B\\bot<\/WorkingDirectory>/);
   assert.match(xml, /<ExecutionTimeLimit>PT0S<\/ExecutionTimeLimit>/);
 });
@@ -105,10 +110,14 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     homeDir: '/Users/me',
     uid: 501,
     dataDir: '/Volumes/Private Bot Data',
+    envFile: '/Users/me/.config/agygram/bot.env',
   });
   assert.equal(mac.entryPath, '/Users/me/My Bot/src/service/file-runner.js');
   assert.match(mac.definition, /<string>\/dev\/null<\/string>/);
+  assert.match(mac.definition, /<string>\/opt\/homebrew\/bin\/node<\/string>\s*<string>--<\/string>/);
   assert.match(mac.definition, /<string>--data-dir<\/string>\s*<string>\/Volumes\/Private Bot Data<\/string>/);
+  assert.match(mac.definition, /<string>--config-file<\/string>\s*<string>\/Users\/me\/\.config\/agygram\/bot\.env<\/string>/);
+  assert.doesNotMatch(mac.definition, /--env-file/);
   assert.ok(path.posix.isAbsolute(mac.managerExecutables.launchctl));
   assert.deepEqual(
     mac.operations.find(
@@ -123,10 +132,14 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     projectDir: '/home/me/My Bot',
     nodePath: '/usr/bin/node',
     homeDir: '/home/me',
+    envFile: '/home/me/.config/agygram/bot.env',
     env: { PATH: process.env.PATH },
   });
   assert.equal(linux.definitionPath, '/home/me/.config/systemd/user/antigravity-telegram-cli.service');
+  assert.match(linux.definition, /ExecStart="\/usr\/bin\/node" "--"/);
   assert.match(linux.definition, /"--data-dir" "\/home\/me\/My Bot\/data"/);
+  assert.match(linux.definition, /"--config-file" "\/home\/me\/\.config\/agygram\/bot\.env"/);
+  assert.doesNotMatch(linux.definition, /--env-file/);
   assert.ok(path.posix.isAbsolute(linux.managerExecutables.systemctl));
   const restart = linux.operations.find(
     (item) => path.posix.basename(item.file || '') === 'systemctl' &&
@@ -155,6 +168,7 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     windowsUserId: 'PC\\Me',
     environmentPath: 'C:\\Tools;C:\\Windows\\System32',
     dataDir: 'D:\\Private Bot Data',
+    envFile: 'C:\\Users\\Me\\Private Config\\bot.env',
   });
   assert.equal(windows.entryPath, 'C:\\Users\\Me\\My Bot\\src\\service\\file-runner.js');
   const create = windows.operations.find(
@@ -186,9 +200,11 @@ test('all three install plans use absolute native paths and argv arrays', () => 
     'C:\\Windows\\System32\\taskkill.exe',
   );
   assert.ok(windows.definition.includes(
-    '&quot;C:\\Users\\Me\\My Bot\\src\\service\\file-runner.js&quot; --data-dir ' +
-      '&quot;D:\\Private Bot Data&quot;',
+    '-- &quot;C:\\Users\\Me\\My Bot\\src\\service\\file-runner.js&quot; --data-dir ' +
+      '&quot;D:\\Private Bot Data&quot; --config-file ' +
+      '&quot;C:\\Users\\Me\\Private Config\\bot.env&quot;',
   ));
+  assert.doesNotMatch(windows.definition, /--env-file/);
   assert.equal(
     windows.definitionPath,
     'D:\\Private Bot Data\\runtime\\service\\antigravity-telegram-cli.xml',
@@ -218,6 +234,157 @@ test('status and uninstall plans do not contain an install definition', () => {
   });
   assert.equal(remove.definition, undefined);
   assert.ok(remove.operations.some((item) => item.type === 'remove'));
+});
+
+test('POSIX uninstall plans narrowly classify already-absent native services', () => {
+  const mac = buildServicePlan('uninstall', {
+    platform: 'darwin',
+    projectDir: '/Users/me/agygram',
+    nodePath: '/usr/bin/node',
+    homeDir: '/Users/me',
+    uid: 501,
+  });
+  const bootout = mac.operations.find((item) => item.args?.[0] === 'bootout');
+  assert.equal(bootout.absentService, 'launchd');
+  assert.equal(bootout.serviceName, 'dev.antigravity.telegram-cli');
+  assert.deepEqual(bootout.envOverrides, { LANG: 'C', LC_ALL: 'C' });
+
+  const linux = buildServicePlan('uninstall', {
+    platform: 'linux',
+    projectDir: '/srv/agygram',
+    nodePath: '/usr/bin/node',
+    homeDir: '/home/me',
+  });
+  const disable = linux.operations.find((item) => item.args?.includes('disable'));
+  assert.equal(disable.absentService, 'systemd');
+  assert.equal(disable.serviceName, 'antigravity-telegram-cli.service');
+  assert.deepEqual(disable.envOverrides, { LANG: 'C', LC_ALL: 'C' });
+  assert.equal(
+    linux.operations.find((item) => item.args?.includes('daemon-reload')).absentService,
+    undefined,
+  );
+});
+
+test('POSIX uninstall continues only for manager-confirmed absence', async () => {
+  const cases = [
+    {
+      operation: {
+        type: 'command',
+        file: '/bin/launchctl',
+        args: ['bootout', 'gui/501/dev.antigravity.telegram-cli'],
+        absentService: 'launchd',
+        serviceName: 'dev.antigravity.telegram-cli',
+        envOverrides: { LANG: 'C', LC_ALL: 'C' },
+      },
+      error: Object.assign(new Error('launchctl failed'), {
+        exitCode: 3,
+        stdout: '',
+        stderr: 'Boot-out failed: 3: No such process\n',
+      }),
+    },
+    {
+      operation: {
+        type: 'command',
+        file: '/usr/bin/systemctl',
+        args: ['--user', 'disable', '--now', 'antigravity-telegram-cli.service'],
+        absentService: 'systemd',
+        serviceName: 'antigravity-telegram-cli.service',
+        envOverrides: { LANG: 'C', LC_ALL: 'C' },
+      },
+      error: Object.assign(new Error('systemctl failed'), {
+        exitCode: 1,
+        stdout: '',
+        stderr: 'Failed to disable unit: Unit file antigravity-telegram-cli.service does not exist.\n',
+      }),
+    },
+  ];
+
+  for (const { operation, error } of cases) {
+    const calls = [];
+    const warnings = [];
+    await executeServicePlan({
+      operations: [
+        operation,
+        { type: 'command', file: '/safe/next-step', args: [] },
+      ],
+    }, {
+      commandEnvironment: { HOME: '/safe/home', PATH: '/safe/bin' },
+      onWarning: (message) => warnings.push(message),
+      async runner(file, args, options) {
+        calls.push({ file, args, options });
+        if (file === operation.file) throw error;
+      },
+    });
+    assert.equal(calls.length, 2);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /already absent/);
+    assert.equal(calls[0].options.captureOutput, true);
+    assert.deepEqual(calls[0].options.env, {
+      HOME: '/safe/home',
+      PATH: '/safe/bin',
+      LANG: 'C',
+      LC_ALL: 'C',
+    });
+  }
+});
+
+test('POSIX uninstall surfaces permission, executable, signal, and ambiguous errors', async () => {
+  const operation = {
+    type: 'command',
+    file: '/usr/bin/systemctl',
+    args: ['--user', 'disable', '--now', 'antigravity-telegram-cli.service'],
+    absentService: 'systemd',
+    serviceName: 'antigravity-telegram-cli.service',
+    envOverrides: { LANG: 'C', LC_ALL: 'C' },
+  };
+  const failures = [
+    Object.assign(new Error('permission denied'), {
+      exitCode: 1,
+      stderr: 'Failed to connect to bus: Permission denied\n',
+    }),
+    Object.assign(new Error('wrong unit'), {
+      exitCode: 1,
+      stderr: 'Failed to disable unit: Unit file another.service does not exist.\n',
+    }),
+    Object.assign(new Error('manager executable missing'), { code: 'ENOENT' }),
+    Object.assign(new Error('manager stopped by signal'), { signal: 'SIGTERM' }),
+    new Error('manager timed out'),
+  ];
+
+  for (const failure of failures) {
+    let calls = 0;
+    await assert.rejects(
+      executeServicePlan({
+        operations: [
+          operation,
+          { type: 'command', file: '/safe/must-not-run', args: [] },
+        ],
+      }, {
+        async runner() {
+          calls += 1;
+          throw failure;
+        },
+      }),
+      failure,
+    );
+    assert.equal(calls, 1);
+  }
+
+  const launchdAmbiguity = Object.assign(new Error('not confirmed absent'), {
+    exitCode: 3,
+    stderr: 'Boot-out failed: 3: Permission denied\n',
+  });
+  await assert.rejects(
+    executeServicePlan({
+      operations: [{
+        ...operation,
+        file: '/bin/launchctl',
+        absentService: 'launchd',
+        serviceName: 'dev.antigravity.telegram-cli',
+      }],
+    }, { runner: async () => { throw launchdAmbiguity; } }),
+    launchdAmbiguity,
+  );
 });
 
 test('plan formatting is diagnostic only and execution passes argv without a shell', async () => {
@@ -275,7 +442,36 @@ test('Windows control script requests lifecycle shutdown before a bounded hard f
   assert.match(script, /Wait-ForTaskExit 15/);
   assert.match(script, /Remove-StopRequest/);
   assert.match(script, /Unregister-ScheduledTask/);
+  assert.match(script, /if \(\$null -eq \$task\)[\s\S]*Remove-StopRequest[\s\S]*exit 0/);
   assert.match(script, /did not become ready/);
+});
+
+test('Windows service environment retains only the identity needed for native task install', () => {
+  const env = cliPrivate.loadServiceManagerEnvironment({
+    USERNAME: 'Alice',
+    USERDOMAIN: 'DEVBOX',
+    SystemRoot: 'C:\\Windows',
+    PATH: 'C:\\Windows\\System32',
+    BOT_TOKEN: 'must-not-be-copied',
+    NODE_OPTIONS: '--require=C:\\attacker.cjs',
+  });
+  assert.deepEqual(env, {
+    USERNAME: 'Alice',
+    USERDOMAIN: 'DEVBOX',
+    PATH: 'C:\\Windows\\System32',
+    SystemRoot: 'C:\\Windows',
+  });
+  assert.equal(cliPrivate.SERVICE_CONFIG_KEYS.has('USERNAME'), false);
+  assert.equal(cliPrivate.SERVICE_CONFIG_KEYS.has('USERDOMAIN'), false);
+
+  const plan = buildServicePlan('install', {
+    platform: 'win32',
+    projectDir: 'C:\\Agygram',
+    nodePath: 'C:\\Node\\node.exe',
+    dataDir: 'C:\\Agygram Data',
+    env,
+  });
+  assert.match(plan.definition, /<UserId>DEVBOX\\Alice<\/UserId>/);
 });
 
 test('CLI option parsing accepts dry-run and rejects missing values', () => {
@@ -292,6 +488,173 @@ test('CLI option parsing accepts dry-run and rejects missing values', () => {
   assert.throws(() => cliPrivate.parseOptions(['--node']), /Missing value/);
   assert.equal(cliPrivate.parseOptions(['--uid', '501']).uid, 501);
   assert.throws(() => cliPrivate.parseOptions(['--uid', '-1']), /Invalid uid/);
+  assert.deepEqual(
+    cliPrivate.parseOptions([
+      '--config-file',
+      path.join(os.homedir(), '.config', 'agygram', 'bot.env'),
+      '--data-dir',
+      path.join(os.homedir(), '.local', 'share', 'agygram'),
+    ]),
+    {
+      dryRun: false,
+      platform: undefined,
+      projectDir: cliPrivate.PROJECT_DIR,
+      nodePath: process.execPath,
+      enableLinger: true,
+      envFile: path.join(os.homedir(), '.config', 'agygram', 'bot.env'),
+      dataDir: path.join(os.homedir(), '.local', 'share', 'agygram'),
+    },
+  );
+  assert.throws(
+    () => cliPrivate.parseOptions(['--config-file', 'relative.env']),
+    /must be absolute/,
+  );
+  assert.throws(
+    () => cliPrivate.parseOptions(['--data-dir', `${os.homedir()}\ndata`]),
+    /control characters/,
+  );
+  assert.throws(
+    () => cliPrivate.parseOptions(['--config-file', '/one', '--config-file', '/two']),
+    /Duplicate option/,
+  );
+  assert.throws(
+    () => cliPrivate.parseOptions(['--env-file', path.join(os.homedir(), '.env')]),
+    /Unknown option: --env-file/,
+  );
+  assert.throws(() => cliPrivate.parseOptions(['--bogus']), /Unknown option/);
+});
+
+test('doctor spawn argv places the Node option boundary before the JavaScript entrypoint', () => {
+  assert.deepEqual(cliPrivate.buildDoctorArguments({
+    projectDir: '/srv/agygram',
+    dataDir: '/var/lib/agygram',
+    envFile: '/etc/agygram/bot.env',
+  }), [
+    '--',
+    path.join('/srv/agygram', 'src', 'doctor.js'),
+    '--data-dir',
+    '/var/lib/agygram',
+    '--config-file',
+    '/etc/agygram/bot.env',
+  ]);
+});
+
+test('help cannot bypass unknown option validation', async () => {
+  await assert.rejects(
+    cliMain(['service', 'install', '--bogus', '--help']),
+    /Unknown option/,
+  );
+});
+
+test('Node 22+ passes a missing --config-file path to agygram for validation', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-missing-config-'));
+  const missingConfig = path.join(directory, 'missing.env');
+  try {
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        path.join(process.cwd(), 'bin', 'agygram.js'),
+        'service',
+        'status',
+        '--dry-run',
+        '--project-dir',
+        directory,
+        '--config-file',
+        missingConfig,
+      ], {
+        cwd: process.cwd(),
+        env: {
+          HOME: os.homedir(),
+          USERPROFILE: process.env.USERPROFILE,
+          LOCALAPPDATA: process.env.LOCALAPPDATA,
+          PATH: process.env.PATH,
+          SystemRoot: process.env.SystemRoot,
+          WINDIR: process.env.WINDIR,
+        },
+        timeout: 10_000,
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /^agygram: /u);
+        assert.match(error.stderr, /ENOENT/u);
+        assert.match(error.stderr, new RegExp(
+          missingConfig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        ));
+        assert.doesNotMatch(error.stderr, /^node:/u);
+        return true;
+      },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('doctor CLI forwards and trust-checks the exact external env file', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-doctor-env-'));
+  const envFile = path.join(directory, 'external.env');
+  try {
+    await writeFile(envFile, 'BOT_TOKEN=must-not-be-loaded\n', { mode: 0o644 });
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        path.join(process.cwd(), 'bin', 'agygram.js'),
+        'doctor',
+        '--config-file',
+        envFile,
+      ], {
+        cwd: process.cwd(),
+        env: {
+          HOME: os.homedir(),
+          PATH: process.env.PATH,
+        },
+        timeout: 10_000,
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stdout, /FAIL 환경 파일 권한:/);
+        assert.match(error.stdout, new RegExp(envFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        assert.match(error.stdout, /deny group\/other access/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('doctor treats an explicit env file as authoritative over ambient app config', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-doctor-authority-'));
+  const envFile = path.join(directory, 'external.env');
+  try {
+    await writeFile(envFile, 'DEFAULT_MODE=invalid\n', { mode: 0o600 });
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        path.join(process.cwd(), 'bin', 'agygram.js'),
+        'doctor',
+        '--config-file',
+        envFile,
+      ], {
+        cwd: process.cwd(),
+        env: {
+          HOME: os.homedir(),
+          PATH: process.env.PATH,
+          BOT_TOKEN: '123456:ambient-token',
+          ALLOWED_CHAT_ID: '123456',
+          DEFAULT_MODE: 'plan',
+        },
+        timeout: 10_000,
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stdout, /FAIL 환경 설정: DEFAULT_MODE must be accept-edits or plan/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('Linux can skip linger and Windows rejects task paths over 260 characters', () => {
@@ -535,13 +898,17 @@ test('Linux service definition honors XDG_CONFIG_HOME and pins DATA_DIR', () => 
   assert.match(plan.definition, /"--data-dir" "\/var\/lib\/agygram-user"/);
 });
 
-test('native status and uninstall dry-runs resolve custom DATA_DIR from .env', async () => {
+test('native status dry-run resolves custom DATA_DIR from .env', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-service-data-'));
   const configuredDataDir = path.join(directory, 'private service data');
   const originalWrite = process.stdout.write;
   const output = [];
   try {
-    await writeFile(path.join(directory, '.env'), `DATA_DIR=${configuredDataDir}\n`);
+    await writeFile(path.join(directory, '.env'), [
+      `DATA_DIR=${configuredDataDir}`,
+      ...(process.platform === 'win32' ? ['WINDOWS_ACL_VERIFIED=true'] : []),
+      '',
+    ].join('\n'));
     if (process.platform !== 'win32') await chmod(path.join(directory, '.env'), 0o600);
     process.stdout.write = (value) => {
       output.push(String(value));
@@ -554,22 +921,255 @@ test('native status and uninstall dry-runs resolve custom DATA_DIR from .env', a
       '--project-dir',
       directory,
     ]);
-    await cliMain([
-      'service',
-      'uninstall',
-      '--dry-run',
-      '--project-dir',
-      directory,
-    ]);
-    assert.equal(output.length, 2);
-    assert.ok(output.every((value) => value.includes(`data: ${configuredDataDir}`)));
+    assert.equal(output.length, 1);
+    assert.ok(output[0].includes(`data: ${configuredDataDir}`));
   } finally {
     process.stdout.write = originalWrite;
     await rm(directory, { recursive: true, force: true });
   }
 });
 
+test('native install and status read an external env file while uninstall uses explicit pins', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-external-env-'));
+  const envFile = path.join(directory, 'managed bot.env');
+  const configuredDataDir = path.join(directory, 'managed data');
+  const ignoredDataDir = path.join(directory, 'project data');
+  const agyBin = path.join(directory, process.platform === 'win32' ? 'agy.exe' : 'agy');
+  const originalWrite = process.stdout.write;
+  const output = [];
+  try {
+    await writeFile(path.join(directory, '.env'), `DATA_DIR=${ignoredDataDir}\n`);
+    await writeFile(envFile, [
+      'BOT_TOKEN=123456:service-token',
+      'ALLOWED_CHAT_ID=123456',
+      `AGY_BIN=${agyBin}`,
+      `DATA_DIR=${configuredDataDir}`,
+      ...(process.platform === 'win32' ? ['WINDOWS_ACL_VERIFIED=true'] : []),
+      '',
+    ].join('\n'));
+    if (process.platform !== 'win32') {
+      await chmod(path.join(directory, '.env'), 0o600);
+      await chmod(envFile, 0o600);
+    }
+    process.stdout.write = (value) => {
+      output.push(String(value));
+      return true;
+    };
+    for (const action of ['install', 'status']) {
+      await cliMain([
+        'service',
+        action,
+        '--dry-run',
+        '--project-dir',
+        directory,
+        '--config-file',
+        envFile,
+      ]);
+    }
+    await cliMain([
+      'service',
+      'uninstall',
+      '--dry-run',
+      '--project-dir',
+      directory,
+      '--config-file',
+      envFile,
+      '--data-dir',
+      configuredDataDir,
+    ]);
+    assert.equal(output.length, 3);
+    assert.ok(output.every((value) => value.includes(`environment: ${envFile}`)));
+    assert.ok(output.every((value) => value.includes(`data: ${configuredDataDir}`)));
+    assert.ok(output.every((value) => !value.includes(ignoredDataDir)));
+    assert.match(output[0], /--config-file/);
+    assert.doesNotMatch(output[0], /--env-file/);
+  } finally {
+    process.stdout.write = originalWrite;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('an explicitly selected missing env file is rejected before service lookup', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-missing-env-'));
+  try {
+    await assert.rejects(
+      cliMain([
+        'service',
+        'status',
+        '--dry-run',
+        '--project-dir',
+        directory,
+        '--config-file',
+        path.join(directory, 'missing.env'),
+      ]),
+      { code: 'ENOENT' },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('managed uninstall invocation ignores a missing config and preserves Node option boundary', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-uninstall-missing-config-'));
+  const missingConfig = path.join(directory, 'removed.env');
+  const dataDir = path.join(directory, 'managed data');
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [
+      '--',
+      path.join(process.cwd(), 'bin', 'agygram.js'),
+      'service',
+      'uninstall',
+      '--dry-run',
+      '--project-dir',
+      directory,
+      '--config-file',
+      missingConfig,
+      '--data-dir',
+      dataDir,
+    ], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        BOT_TOKEN: 'must-not-reach-service-manager',
+        NODE_OPTIONS: '',
+      },
+      timeout: 10_000,
+    });
+    assert.equal(stderr, '');
+    assert.match(stdout, new RegExp(
+      `environment: ${missingConfig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+    ));
+    assert.match(stdout, new RegExp(
+      `data: ${dataDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+    ));
+    await assert.rejects(
+      cliMain([
+        'service',
+        'install',
+        '--dry-run',
+        '--project-dir',
+        directory,
+        '--config-file',
+        missingConfig,
+        '--data-dir',
+        dataDir,
+      ]),
+      { code: 'ENOENT' },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('uninstall never reads a chmod-drifted config, while install remains fail-closed', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agygram-uninstall-config-drift-'));
+  const envFile = path.join(directory, 'managed.env');
+  const dataDir = path.join(directory, 'managed data');
+  const attackerDataDir = path.join(directory, 'attacker-selected-data');
+  const originalWrite = process.stdout.write;
+  const output = [];
+  try {
+    await writeFile(envFile, [
+      `DATA_DIR=${attackerDataDir}`,
+      'DEFAULT_MODE=invalid-if-loaded',
+      'BOT_TOKEN=must-not-be-loaded',
+      '',
+    ].join('\n'), { mode: 0o644 });
+    await chmod(envFile, 0o644);
+    process.stdout.write = (value) => {
+      output.push(String(value));
+      return true;
+    };
+
+    await cliMain([
+      'service',
+      'uninstall',
+      '--dry-run',
+      '--project-dir',
+      directory,
+      '--config-file',
+      envFile,
+      '--data-dir',
+      dataDir,
+    ]);
+    assert.equal(output.length, 1);
+    assert.match(output[0], new RegExp(
+      `data: ${dataDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+    ));
+    assert.doesNotMatch(output[0], new RegExp(
+      attackerDataDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ));
+
+    await assert.rejects(
+      cliMain([
+        'service',
+        'install',
+        '--dry-run',
+        '--project-dir',
+        directory,
+        '--config-file',
+        envFile,
+        '--data-dir',
+        dataDir,
+      ]),
+      /deny group\/other access/u,
+    );
+  } finally {
+    process.stdout.write = originalWrite;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('uninstall service-manager commands receive only the sanitized OS environment', async () => {
+  const commandEnvironment = cliPrivate.loadServiceManagerEnvironment({
+    HOME: '/safe/home',
+    PATH: '/safe/bin',
+    XDG_RUNTIME_DIR: '/safe/runtime',
+    BOT_TOKEN: 'secret',
+    NODE_OPTIONS: '--require=/tmp/attacker.cjs',
+    LD_PRELOAD: '/tmp/attacker.so',
+  });
+  assert.deepEqual(commandEnvironment, {
+    HOME: '/safe/home',
+    PATH: '/safe/bin',
+    XDG_RUNTIME_DIR: '/safe/runtime',
+  });
+
+  const calls = [];
+  await executeServicePlan({
+    operations: [{ type: 'command', file: '/safe/bin/service-manager', args: ['remove'] }],
+  }, {
+    commandEnvironment,
+    async runner(file, args, options) {
+      calls.push({ file, args, options });
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].options.env, commandEnvironment);
+  assert.equal(calls[0].options.env.BOT_TOKEN, undefined);
+  assert.equal(calls[0].options.env.NODE_OPTIONS, undefined);
+});
+
 test('native service-manager commands have a bounded execution time', async () => {
+  await assert.rejects(
+    spawnCommand(process.execPath, [
+      '-e',
+      'process.stdout.write("manager stdout"); process.stderr.write("manager stderr"); process.exit(7)',
+    ], {
+      stdio: 'ignore',
+      captureOutput: true,
+      timeoutMs: 2_000,
+    }),
+    (error) => {
+      assert.equal(error.exitCode, 7);
+      assert.equal(error.signal, null);
+      assert.equal(error.stdout, 'manager stdout');
+      assert.equal(error.stderr, 'manager stderr');
+      return true;
+    },
+  );
   await assert.rejects(
     spawnCommand(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',

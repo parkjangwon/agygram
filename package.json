@@ -1,6 +1,6 @@
 {
   "name": "antigravity-telegram-cli",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "Headless, cross-platform Telegram controller for Google Antigravity CLI",
   "license": "MIT",
   "repository": {
@@ -26,6 +26,7 @@
     "ecosystem.config.cjs",
     "README.md",
     "README.ko.md",
+    "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE"
   ],
@@ -34,6 +35,7 @@
     "dev": "node --watch src/index.js",
     "doctor": "node src/doctor.js",
     "service:dry-run": "node bin/agygram.js service install --dry-run",
+    "check:release": "node scripts/check-release.js",
     "test": "node --test",
     "check": "node scripts/check.js"
   },

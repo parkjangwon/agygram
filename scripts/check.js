@@ -9,7 +9,11 @@ async function collect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) await collect(target);
-    else if (entry.isFile() && entry.name.endsWith('.js') && target !== 'scripts/check.js') files.push(target);
+    else if (
+      entry.isFile() &&
+      /\.m?js$/u.test(entry.name) &&
+      target !== 'scripts/check.js'
+    ) files.push(target);
   }
 }
 

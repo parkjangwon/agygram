@@ -29,7 +29,11 @@ import {
   WINDOWS_TASK_NAME,
   platformPath,
 } from './templates.js';
-import { buildServiceRuntimePaths, resolveServiceDataDir } from './runtime-paths.js';
+import {
+  buildServiceRuntimePaths,
+  resolveRuntimeEnvFile,
+  resolveServiceDataDir,
+} from './runtime-paths.js';
 
 const SUPPORTED_PLATFORMS = new Set(['darwin', 'linux', 'win32']);
 const POSIX_MANAGER_PREVIEW_PATHS = Object.freeze({
@@ -105,6 +109,7 @@ async function auditPosixServicePaths(plan) {
     ['project directory', plan.projectDir, true],
     ['Node executable', plan.nodePath, true],
     ...(plan.agyBin ? [['agy executable', plan.agyBin, true]] : []),
+    ...(plan.envFile ? [['environment file', plan.envFile, true]] : []),
     ['service entry', plan.entryPath, true],
     ...Object.entries(plan.managerExecutables || {})
       .filter(([, executable]) => Boolean(executable))
@@ -255,6 +260,11 @@ export function buildServicePlan(action, options = {}) {
   assertAbsolute(nodePath, pathApi, 'nodePath');
   if (options.agyBin) assertAbsolute(options.agyBin, pathApi, 'agyBin');
   if (platform !== 'win32') assertAbsolute(homeDir, pathApi, 'homeDir');
+  const envFile = resolveRuntimeEnvFile({
+    projectDir,
+    configuredEnvFile: options.envFile,
+    platform,
+  });
   const dataDir = resolveServiceDataDir({
     projectDir,
     configuredDataDir: options.dataDir,
@@ -331,7 +341,7 @@ export function buildServicePlan(action, options = {}) {
       definition = buildLaunchdPlist({
         nodePath,
         entryPath,
-        entryArguments: ['--data-dir', dataDir],
+        entryArguments: ['--data-dir', dataDir, '--config-file', envFile],
         projectDir,
         stdoutPath: '/dev/null',
         stderrPath: '/dev/null',
@@ -352,7 +362,11 @@ export function buildServicePlan(action, options = {}) {
       );
     } else if (action === 'uninstall') {
       operations.push(
-        command(managerExecutables.launchctl, ['bootout', `${domain}/${LAUNCHD_LABEL}`]),
+        command(managerExecutables.launchctl, ['bootout', `${domain}/${LAUNCHD_LABEL}`], {
+          absentService: 'launchd',
+          serviceName: LAUNCHD_LABEL,
+          envOverrides: { LANG: 'C', LC_ALL: 'C' },
+        }),
         { type: 'remove', path: definitionPath },
       );
     } else {
@@ -371,7 +385,7 @@ export function buildServicePlan(action, options = {}) {
       definition = buildSystemdUnit({
         nodePath,
         entryPath,
-        entryArguments: ['--data-dir', dataDir],
+        entryArguments: ['--data-dir', dataDir, '--config-file', envFile],
         projectDir,
         environmentPath,
       });
@@ -401,7 +415,11 @@ export function buildServicePlan(action, options = {}) {
           'disable',
           '--now',
           `${SERVICE_NAME}.service`,
-        ]),
+        ], {
+          absentService: 'systemd',
+          serviceName: `${SERVICE_NAME}.service`,
+          envOverrides: { LANG: 'C', LC_ALL: 'C' },
+        }),
         { type: 'remove', path: definitionPath },
         command(managerExecutables.systemctl, ['--user', 'daemon-reload']),
         command(managerExecutables.systemctl, [
@@ -450,6 +468,7 @@ export function buildServicePlan(action, options = {}) {
         entryPath,
         projectDir,
         dataDir,
+        envFile,
         definitionPath,
         controlScriptPath,
         runtimeEnvironmentPath,
@@ -464,7 +483,7 @@ export function buildServicePlan(action, options = {}) {
       definition = buildWindowsTaskXml({
         nodePath,
         entryPath,
-        entryArguments: ['--data-dir', dataDir],
+        entryArguments: ['--data-dir', dataDir, '--config-file', envFile],
         projectDir,
         userId,
       });
@@ -571,6 +590,7 @@ export function buildServicePlan(action, options = {}) {
     platform,
     projectDir,
     dataDir,
+    envFile,
     nodePath,
     entryPath,
     agyBin: options.agyBin,
@@ -597,6 +617,7 @@ export function formatServicePlan(plan) {
     `platform: ${plan.platform}`,
     `action: ${plan.action}`,
     `project: ${plan.projectDir}`,
+    `environment: ${plan.envFile}`,
     `data: ${plan.dataDir}`,
   ];
   if (plan.definitionPath) lines.push(`definition: ${plan.definitionPath}`);
@@ -642,17 +663,28 @@ export async function spawnCommand(file, args, {
   stdio = 'inherit',
   timeoutMs = 120_000,
   env,
+  captureOutput = false,
 } = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
     throw new Error('command timeoutMs must be a positive integer');
   }
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, {
-      stdio,
+      stdio: captureOutput ? ['ignore', 'pipe', 'pipe'] : stdio,
       windowsHide: true,
       shell: false,
       ...(env ? { env } : {}),
     });
+    const outputLimit = 16 * 1024;
+    let stdout = Buffer.alloc(0);
+    let stderr = Buffer.alloc(0);
+    const append = (current, chunk) => {
+      const remaining = outputLimit - current.length;
+      if (remaining <= 0) return current;
+      return Buffer.concat([current, chunk.subarray(0, remaining)]);
+    };
+    child.stdout?.on('data', (chunk) => { stdout = append(stdout, chunk); });
+    child.stderr?.on('data', (chunk) => { stderr = append(stderr, chunk); });
     let timedOut = false;
     let settled = false;
     let forceTimer;
@@ -679,13 +711,45 @@ export async function spawnCommand(file, args, {
         reject(new Error(`${file} timed out after ${timeoutMs}ms`));
         return;
       }
-      if (code === 0) resolve({ code, signal });
-      else {
+      if (code === 0) {
+        resolve({
+          code,
+          signal,
+          ...(captureOutput
+            ? { stdout: stdout.toString('utf8'), stderr: stderr.toString('utf8') }
+            : {}),
+        });
+      } else {
         const reason = signal ? `signal ${signal}` : `exit code ${code}`;
-        reject(new Error(`${file} failed with ${reason}`));
+        const error = new Error(`${file} failed with ${reason}`);
+        error.exitCode = code;
+        error.signal = signal;
+        if (captureOutput) {
+          error.stdout = stdout.toString('utf8');
+          error.stderr = stderr.toString('utf8');
+        }
+        reject(error);
       }
     });
   });
+}
+
+function isAbsentServiceError(error, operation) {
+  if (!Number.isInteger(error?.exitCode)) return false;
+  const stdout = String(error.stdout || '').trim();
+  const stderr = String(error.stderr || '').replaceAll('\r\n', '\n').trim();
+  if (stdout) return false;
+  if (operation.absentService === 'launchd') {
+    return error.exitCode === 3 && stderr === 'Boot-out failed: 3: No such process';
+  }
+  if (operation.absentService === 'systemd') {
+    const escapedName = operation.serviceName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    return error.exitCode === 1 && new RegExp(
+      `^Failed to disable unit: Unit (?:file )?${escapedName} does not exist\\.$`,
+      'u',
+    ).test(stderr);
+  }
+  return false;
 }
 
 export async function executeServicePlan(plan, options = {}) {
@@ -699,12 +763,21 @@ export async function executeServicePlan(plan, options = {}) {
       await rm(operation.path, { force: true });
     } else if (operation.type === 'command') {
       try {
+        const baseEnvironment = operation.env ?? options.commandEnvironment;
+        const commandEnvironment = operation.envOverrides
+          ? { ...(baseEnvironment ?? process.env), ...operation.envOverrides }
+          : baseEnvironment;
         await runner(operation.file, operation.args, {
           stdio: 'inherit',
+          ...(operation.absentService ? { captureOutput: true } : {}),
           ...(operation.timeoutMs ? { timeoutMs: operation.timeoutMs } : {}),
-          ...(operation.env ? { env: operation.env } : {}),
+          ...(commandEnvironment ? { env: commandEnvironment } : {}),
         });
       } catch (error) {
+        if (operation.absentService && isAbsentServiceError(error, operation)) {
+          options.onWarning?.(`${operation.serviceName} is already absent; continuing removal`);
+          continue;
+        }
         if (!operation.allowFailure) throw error;
         options.onWarning?.(`${error.message} (continuing)`);
       }
@@ -742,6 +815,7 @@ export async function manageService(action, options = {}) {
   await executeServicePlan(plan, {
     runner: options.runner,
     onWarning,
+    commandEnvironment: options.commandEnvironment,
   });
   return plan;
 }
@@ -776,4 +850,5 @@ export const _private = {
   resolvePosixManagerExecutable,
   auditPosixServicePaths,
   auditPosixRuntimeTree,
+  isAbsentServiceError,
 };

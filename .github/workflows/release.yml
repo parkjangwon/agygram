@@ -1,0 +1,253 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        node:
+          - 22.x
+          - 24.x
+
+    steps:
+      - name: Check out the exact tagged source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Verify the immutable tag checkout
+        run: >-
+          node --input-type=module -e 'import { execFileSync } from "node:child_process";
+          const tag = process.env.GITHUB_REF_NAME;
+          const sha = process.env.GITHUB_SHA;
+          if (process.env.GITHUB_REF_TYPE !== "tag" || !/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag ?? ""))
+          throw new Error(`Ref is not an exact stable SemVer tag: ${tag ?? ""}`);
+          const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+          const direct = git("rev-parse", "--verify", `refs/tags/${tag}`);
+          const peeled = git("rev-parse", "--verify", `refs/tags/${tag}^{commit}`);
+          const head = git("rev-parse", "HEAD");
+          if (head !== peeled || (sha !== direct && sha !== peeled))
+          throw new Error(`Tag/HEAD/event mismatch: direct=${direct} peeled=${peeled} head=${head} event=${sha}`);'
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify release metadata
+        run: npm run check:release
+
+      - name: Run source checks and tests
+        run: |
+          npm run check
+          npm test
+          npm audit --omit=dev --ignore-scripts
+
+      - name: Validate POSIX bootstrap syntax
+        if: runner.os != 'Windows'
+        run: sh -n install.sh uninstall.sh
+
+      - name: Validate Windows PowerShell bootstrap syntax
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($file in @('install.ps1', 'uninstall.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file),
+              [ref] $tokens,
+              [ref] $errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              $errors | ForEach-Object { Write-Error "${file}: $($_.Message)" }
+            }
+          }
+          if ($failed) { exit 1 }
+
+  build:
+    name: Build checksummed release assets
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the exact tagged source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Verify the immutable tag checkout
+        run: >-
+          node --input-type=module -e 'import { execFileSync } from "node:child_process";
+          const tag = process.env.GITHUB_REF_NAME;
+          const sha = process.env.GITHUB_SHA;
+          if (process.env.GITHUB_REF_TYPE !== "tag" || !/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag ?? ""))
+          throw new Error(`Ref is not an exact stable SemVer tag: ${tag ?? ""}`);
+          const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+          const direct = git("rev-parse", "--verify", `refs/tags/${tag}`);
+          const peeled = git("rev-parse", "--verify", `refs/tags/${tag}^{commit}`);
+          const head = git("rev-parse", "HEAD");
+          if (head !== peeled || (sha !== direct && sha !== peeled))
+          throw new Error(`Tag/HEAD/event mismatch: direct=${direct} peeled=${peeled} head=${head} event=${sha}`);'
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          package_file="antigravity-telegram-cli-${version}.tgz"
+          mkdir dist
+          npm pack --pack-destination dist --silent >/dev/null
+          test -f "dist/${package_file}"
+          cp install.sh install.ps1 uninstall.sh uninstall.ps1 dist/
+          cp scripts/install.mjs scripts/uninstall.mjs dist/
+          (
+            cd dist
+            sha256sum \
+              "${package_file}" \
+              install.mjs \
+              install.ps1 \
+              install.sh \
+              uninstall.mjs \
+              uninstall.ps1 \
+              uninstall.sh > SHA256SUMS
+          )
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    name: Attest and publish ${{ github.ref_name }}
+    needs:
+      - verify
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download verified release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Revalidate tag and release assets
+        id: release_identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          package_file="antigravity-telegram-cli-${version}.tgz"
+
+          remote_refs="$(git ls-remote \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" \
+            "refs/tags/${GITHUB_REF_NAME}^{}")"
+          direct_sha="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"${remote_refs}")"
+          peeled_sha="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"${remote_refs}")"
+          resolved_sha="${peeled_sha:-${direct_sha}}"
+          test -n "${direct_sha}"
+          test "${GITHUB_SHA}" = "${direct_sha}" || test "${GITHUB_SHA}" = "${resolved_sha}"
+          [[ "${resolved_sha}" =~ ^[0-9a-f]{40}$ ]]
+          printf 'commit=%s\n' "${resolved_sha}" >> "${GITHUB_OUTPUT}"
+
+          test "$(find release-assets -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" = 8
+          test "$(find release-assets -mindepth 1 -maxdepth 1 ! -type f | wc -l | tr -d ' ')" = 0
+          for file in \
+            "${package_file}" \
+            install.mjs \
+            install.ps1 \
+            install.sh \
+            uninstall.mjs \
+            uninstall.ps1 \
+            uninstall.sh \
+            SHA256SUMS; do
+            test -f "release-assets/${file}"
+          done
+          test "$(wc -l < release-assets/SHA256SUMS | tr -d ' ')" = 7
+          ! grep -Eq '(^|[[:space:]/])SHA256SUMS$' release-assets/SHA256SUMS
+          awk '
+            NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ { exit 1 }
+          ' release-assets/SHA256SUMS
+          expected_checksum_files="$(printf '%s\n' \
+            "${package_file}" \
+            install.mjs \
+            install.ps1 \
+            install.sh \
+            uninstall.mjs \
+            uninstall.ps1 \
+            uninstall.sh)"
+          actual_checksum_files="$(awk '{ print $2 }' release-assets/SHA256SUMS)"
+          test "${actual_checksum_files}" = "${expected_checksum_files}"
+          (
+            cd release-assets
+            sha256sum --check --strict SHA256SUMS
+          )
+
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: release-assets/*
+
+      - name: Create public GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TARGET: ${{ steps.release_identity.outputs.commit }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}" release-assets/*
+          --repo "${GITHUB_REPOSITORY}"
+          --verify-tag
+          --target "${RELEASE_TARGET}"
+          --title "Antigravity Telegram CLI ${GITHUB_REF_NAME}"
+          --generate-notes

@@ -340,6 +340,7 @@ export function buildLaunchdPlist({
   <key>ProgramArguments</key>
   <array>
     <string>${xmlEscape(nodePath)}</string>
+    <string>--</string>
     <string>${xmlEscape(entryPath)}</string>
 ${extraArguments}
   </array>
@@ -390,7 +391,7 @@ export function buildSystemdUnit({
     assertTemplateValue(value, name);
   }
   for (const value of entryArguments) assertTemplateValue(value, 'entry argument');
-  const argumentsLine = [entryPath, ...entryArguments]
+  const argumentsLine = ['--', entryPath, ...entryArguments]
     .map((value) => systemdQuote(value, { escapeDollar: true }))
     .join(' ');
 
@@ -429,7 +430,7 @@ export function buildWindowsTaskXml({
   }
   for (const value of entryArguments) assertTemplateValue(value, 'entry argument');
 
-  const argumentsLine = [entryPath, ...entryArguments].map(windowsQuoteArg).join(' ');
+  const argumentsLine = ['--', entryPath, ...entryArguments].map(windowsQuoteArg).join(' ');
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>

@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   buildServiceRuntimePaths,
   parseFileRunnerArguments,
+  resolveRuntimeEnvFile,
   resolveServiceDataDir,
 } from '../src/service/runtime-paths.js';
 import {
@@ -60,11 +61,50 @@ test('service runtime paths honor custom data directories on POSIX and Windows',
   assert.deepEqual(parseFileRunnerArguments([
     '--data-dir',
     'D:\\Private Bot Data',
-  ], 'win32'), { dataDir: 'D:\\Private Bot Data' });
-  assert.throws(() => parseFileRunnerArguments(['--unknown']), /accepts only --data-dir/);
+    '--config-file',
+    'C:\\Private Config\\agygram.env',
+  ], 'win32'), {
+    dataDir: 'D:\\Private Bot Data',
+    envFile: 'C:\\Private Config\\agygram.env',
+  });
+  assert.equal(resolveRuntimeEnvFile({
+    projectDir: '/srv/agygram',
+    platform: 'linux',
+  }), '/srv/agygram/.env');
+  assert.equal(resolveRuntimeEnvFile({
+    projectDir: '/srv/agygram',
+    configuredEnvFile: '/etc/agygram/bot.env',
+    platform: 'linux',
+  }), '/etc/agygram/bot.env');
+  assert.throws(() => parseFileRunnerArguments(['--unknown']), /Unknown runtime option/);
   assert.throws(
     () => parseFileRunnerArguments(['--data-dir', 'relative-data']),
     /must be absolute/,
+  );
+  assert.throws(
+    () => parseFileRunnerArguments(['--config-file', 'relative.env']),
+    /must be absolute/,
+  );
+  assert.throws(
+    () => parseFileRunnerArguments(['--config-file', '/safe/config\n.env']),
+    /control characters/,
+  );
+  assert.throws(
+    () => parseFileRunnerArguments([
+      '--config-file',
+      '/one.env',
+      '--config-file',
+      '/two.env',
+    ]),
+    /Duplicate runtime option/,
+  );
+  assert.throws(
+    () => parseFileRunnerArguments(['--config-file', '\\root-relative.env'], 'win32'),
+    /must be absolute/,
+  );
+  assert.throws(
+    () => parseFileRunnerArguments(['--env-file', '/etc/agygram/bot.env']),
+    /Unknown runtime option: --env-file/,
   );
 });
 
