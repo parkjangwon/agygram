@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — 2026-07-12
+
+- Remove personal Telegram identifiers from all public examples and history.
+- Synchronize Telegram command menus at default and allowed-chat Korean scopes
+  so stale commands from earlier bot deployments are removed.
+
 ## 0.1.2 — 2026-07-12
 
 - Add owner-only Telegram `/update` and `/update apply` for verified immutable

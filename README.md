@@ -28,8 +28,8 @@ On first run, edit the generated `.env` with at least:
 
 ```dotenv
 BOT_TOKEN=123456:replace-me
-ALLOWED_CHAT_IDS=123456789
-OWNER_USER_IDS=123456789
+ALLOWED_CHAT_IDS=<your-private-chat-id>
+OWNER_USER_IDS=<your-private-user-id>
 AGY_BIN=/absolute/path/to/agy
 WORKSPACE_DIR=/absolute/path/to/workspace
 ```

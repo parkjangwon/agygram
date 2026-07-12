@@ -2,7 +2,7 @@
 
 The release installer is the recommended way to run `agygram` as a current-user service. It keeps immutable application releases separate from configuration, runtime data, and the workspace. The same command performs a first install, an update, or reconciliation of managed state such as launchers, configuration, and the native service. It verifies an existing immutable release but does not rewrite damaged live code in place.
 
-The current public bootstrap is pinned to **0.1.1**. `install.sh` and `install.ps1` embedded in that release select the stable `v0.1.1` release, resolve its exact Git commit, and verify the downloaded installer and package before running them. A future release updates the version embedded in its own bootstrap; `releases/latest/download/...` then serves that new, independently pinned bootstrap.
+The current public bootstrap is pinned to **0.1.3**. `install.sh` and `install.ps1` embedded in that release select the stable `v0.1.3` release, resolve its exact Git commit, and verify the downloaded installer and package before running them. A future release updates the version embedded in its own bootstrap; `releases/latest/download/...` then serves that new, independently pinned bootstrap.
 
 ## Prerequisites
 
@@ -45,8 +45,8 @@ The initial `.env` has no Telegram secret or allowlist. Therefore the first run 
 
 ```dotenv
 BOT_TOKEN=123456:replace-me
-ALLOWED_CHAT_IDS=123456789
-OWNER_USER_IDS=123456789
+ALLOWED_CHAT_IDS=<your-private-chat-id>
+OWNER_USER_IDS=<your-private-user-id>
 ```
 
 Keep the generated absolute `AGY_BIN`, `DATA_DIR`, and `WORKSPACE_DIR`, or replace the latter two with other absolute paths outside the managed code root. For groups and supergroups, also configure `ALLOWED_USER_IDS`; see the main README for the allowlist rules.
@@ -111,7 +111,7 @@ agygram doctor
 agygram service status
 ```
 
-For this release, `agygram --version` must print `0.1.1`. Telegram `/info` also includes the running `agygram` version. The installer prints its resolved `Current` and `Target` version/commit identities.
+For this release, `agygram --version` must print `0.1.3`. Telegram `/info` also includes the running `agygram` version. The installer prints its resolved `Current` and `Target` version/commit identities.
 
 ## Installer options
 
@@ -189,7 +189,7 @@ For independent verification, download the assets from the [GitHub release](http
 
 ```sh
 gh attestation verify ./install.sh --repo parkjangwon/antigravity-telegram-cli
-gh attestation verify ./antigravity-telegram-cli-0.1.1.tgz --repo parkjangwon/antigravity-telegram-cli
+gh attestation verify ./antigravity-telegram-cli-0.1.3.tgz --repo parkjangwon/antigravity-telegram-cli
 ```
 
 Attestation verification requires a current authenticated GitHub CLI. A checksum detects mismatch against the downloaded checksum list; a verified GitHub attestation additionally binds an asset to this repository's release workflow.

@@ -28,8 +28,8 @@ Google Antigravity CLI(`agy`)를 Telegram에서 제어하는 헤드리스 봇입
 
 ```dotenv
 BOT_TOKEN=123456:replace-me
-ALLOWED_CHAT_IDS=123456789
-OWNER_USER_IDS=123456789
+ALLOWED_CHAT_IDS=<내_개인_채팅_ID>
+OWNER_USER_IDS=<내_개인_사용자_ID>
 AGY_BIN=/absolute/path/to/agy
 WORKSPACE_DIR=/absolute/path/to/workspace
 ```
