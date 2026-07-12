@@ -1059,15 +1059,20 @@ function runCommand(file, args, {
 }
 
 async function findNpmCli() {
+  let activeNodeRoot = null;
+  try {
+    activeNodeRoot = await realpath(path.resolve(path.dirname(process.execPath), '..'));
+  } catch {
+    // The standard candidates below will still be checked individually.
+  }
   // npm invokes child scripts with this absolute path. Accept it only when it
   // resolves inside the active Node distribution; never trust an arbitrary
   // environment-provided JavaScript path.
   let npmExecPath = null;
   if (process.env.npm_execpath && path.isAbsolute(process.env.npm_execpath)) {
     try {
-      const nodeRoot = await realpath(path.resolve(path.dirname(process.execPath), '..'));
       const resolved = await realpath(process.env.npm_execpath);
-      if (isStrictDescendant(nodeRoot, resolved)) npmExecPath = resolved;
+      if (activeNodeRoot && isStrictDescendant(activeNodeRoot, resolved)) npmExecPath = resolved;
     } catch {
       // Standard distribution locations below remain authoritative fallbacks.
     }
@@ -1087,7 +1092,12 @@ async function findNpmCli() {
     try {
       const resolved = await realpath(candidate);
       if (!(await stat(resolved)).isFile()) continue;
-      if (process.platform !== 'win32') {
+      // The running Node executable is already trusted. Hosted distributions
+      // commonly place that immutable tree below a group-writable /opt parent,
+      // so auditing every ancestor above the active Node root would reject npm
+      // that ships with the exact Node binary we are executing.
+      const insideActiveNode = activeNodeRoot && isStrictDescendant(activeNodeRoot, resolved);
+      if (process.platform !== 'win32' && !insideActiveNode) {
         const uid = process.getuid?.();
         let current = resolved;
         while (true) {
