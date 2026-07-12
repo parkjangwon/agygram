@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — 2026-07-12
+
+- Add owner-only Telegram `/update` and `/update apply` for verified immutable
+  GitHub releases in official clean source checkouts.
+
 ## 0.1.1 — 2026-07-12
 
 - Make the POSIX `tmux` OAuth transport complete the entire first-run agy

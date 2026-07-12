@@ -189,7 +189,7 @@ function getJson(apiPath) {
       headers: {
         Accept: 'application/vnd.github+json',
         'Accept-Encoding': 'identity',
-        'User-Agent': 'agygram-uninstaller-bootstrap/0.1.1',
+        'User-Agent': 'agygram-uninstaller-bootstrap/0.1.2',
         'X-GitHub-Api-Version': '2022-11-28',
       },
     }, (response) => {
