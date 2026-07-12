@@ -50,6 +50,42 @@ AGY_BIN=C:\Users\<Username>\AppData\Local\agy\bin\agy.exe
 
 If only `agy.cmd` exists, startup and `doctor` fail closed. Install or locate the native `agy.exe`; do not point `AGY_BIN` at the shim.
 
+## Managed install, update, and uninstall (recommended)
+
+Release **0.1.0** provides a current-user manager with immutable application releases and external configuration/data/workspace paths. The same command installs, updates, or reconciles managed state such as the launcher, configuration, and native service. It verifies an existing immutable release but does not rewrite damaged live code in place. The command downloads the bootstrap to a private temporary file before execution; it does not pipe network output into a shell.
+
+macOS and Linux:
+
+```sh
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'exit 1' HUP INT TERM; trap 'rm -f "$f"' 0; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.sh && [ -s "$f" ] && [ "$(wc -c < "$f")" -le 1048576 ] && sh -n "$f" && sh "$f")
+```
+
+Windows PowerShell:
+
+```powershell
+& { $ErrorActionPreference = 'Stop'; $tls = [Net.ServicePointManager]::SecurityProtocol; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; New-Item -ItemType Directory -Path $d | Out-Null; $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $grant = "*${sid}:(OI)(CI)(F)"; $systemDir = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::System); $icacls = Join-Path $systemDir 'icacls.exe'; if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw 'Could not locate system icacls.exe' }; & $icacls $d /inheritance:r /grant:r $grant | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not protect the temporary directory' }; $f = Join-Path $d 'install.ps1'; $ok = $false; for ($i = 1; $i -le 3 -and -not $ok; $i++) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 5 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.ps1' -OutFile $f; $ok = $true } catch { if ($i -eq 3) { throw }; Start-Sleep -Seconds $i } }; $n = (Get-Item -LiteralPath $f).Length; if ($n -lt 1 -or $n -gt 1MB) { throw 'Unexpected bootstrap size' }; $exe = (Get-Process -Id $PID).Path; & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f; if ($LASTEXITCODE -ne 0) { throw "Installer exited with code $LASTEXITCODE" } } finally { [Net.ServicePointManager]::SecurityProtocol = $tls; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
+```
+
+The 0.1.0 bootstrap is pinned to stable tag `v0.1.0`, its exact commit, and verified release digests. Future releases update the version embedded in their bootstrap; rerunning the command then performs the SemVer update. Downgrades are refused unless explicitly authorized.
+
+On its first run, the installer creates the external `.env` and reports its path. Because the template has no bot token or allowlist, it normally leaves the native service uninstalled. Set `BOT_TOKEN`, `ALLOWED_CHAT_IDS`, and the applicable owner/user allowlists, then rerun the same command. On Windows, restrict and inspect the configuration-directory, `.env`, and data-directory DACLs, set `WINDOWS_ACL_VERIFIED=true`, and rerun. A managed config rewrite resets that attestation so it must be reviewed again. Add the printed manager `bin` directory to PATH if you want the `agygram` command; the installer does not edit PATH itself.
+
+Default uninstall preserves configuration, runtime data, workspace/project files, Antigravity OAuth and system-keyring credentials, and Linux linger state. There is deliberately no purge flag.
+
+macOS and Linux:
+
+```sh
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-uninstall.XXXXXXXX") || exit; trap 'exit 1' HUP INT TERM; trap 'rm -f "$f"' 0; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/uninstall.sh && [ -s "$f" ] && [ "$(wc -c < "$f")" -le 1048576 ] && sh -n "$f" && sh "$f")
+```
+
+Windows PowerShell:
+
+```powershell
+& { $ErrorActionPreference = 'Stop'; $tls = [Net.ServicePointManager]::SecurityProtocol; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-uninstall-{0}" -f [Guid]::NewGuid().ToString('N')); try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; New-Item -ItemType Directory -Path $d | Out-Null; $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $grant = "*${sid}:(OI)(CI)(F)"; $systemDir = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::System); $icacls = Join-Path $systemDir 'icacls.exe'; if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw 'Could not locate system icacls.exe' }; & $icacls $d /inheritance:r /grant:r $grant | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not protect the temporary directory' }; $f = Join-Path $d 'uninstall.ps1'; $ok = $false; for ($i = 1; $i -le 3 -and -not $ok; $i++) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 5 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/uninstall.ps1' -OutFile $f; $ok = $true } catch { if ($i -eq 3) { throw }; Start-Sleep -Seconds $i } }; $n = (Get-Item -LiteralPath $f).Length; if ($n -lt 1 -or $n -gt 1MB) { throw 'Unexpected bootstrap size' }; $exe = (Get-Process -Id $PID).Path; & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f; if ($LASTEXITCODE -ne 0) { throw "Uninstaller exited with code $LASTEXITCODE" } } finally { [Net.ServicePointManager]::SecurityProtocol = $tls; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
+```
+
+See [Managed install, update, and uninstall](docs/MANAGED_INSTALL.md) for exact platform paths, custom `--install-root`/`--config-file`/`--agy-bin`/`--no-service` options, Windows ACL commands, PATH setup, checksum and GitHub-attestation verification, rollback/crash recovery, and troubleshooting.
+
 ## Install from a source checkout
 
 Do not copy a production `.env` from another machine. Create it locally and protect it before adding secrets.
@@ -121,7 +157,7 @@ See [.env.example](.env.example) for every limit and policy setting.
 
 ## First run and OAuth
 
-1. Run `npm run doctor`, then start the bot with `npm start` or install the native service.
+1. For a managed installation, finish the printed configuration/ACL steps and rerun the installer until it reports `Service: installed`. From a source checkout, run `npm run doctor`, then use `npm start` or install the native service.
 2. Send `/start` from an allowed Telegram chat.
 3. In an allowed **private** owner chat, send `/auth`.
 4. Open the URL on any browser, finish OAuth, and send the returned code as a plain Telegram message.
@@ -148,7 +184,7 @@ One OS user/keyring means one effective `agy` account for this bot. Every allowe
 | `/sandbox [on\|off]` | Show or explicitly set the session setting; `off` is rejected unless unsandboxed runs are enabled by policy. |
 | `/workspace [path]` | Show or select a real path inside an allowed workspace root. Switching resets conversation context. |
 | `/project [ID\|clear]` | Select or clear an explicit `agy` project and reset conversation context. |
-| `/info` | Show effective workspace, continuity mode, model, agent, mode, sandbox policy, and activity. |
+| `/info` | Show the running `agygram` version, effective workspace, continuity mode, model, agent, mode, sandbox policy, and activity. |
 | `/auth` | Start/restart headless OAuth; owner-only and private-chat-only by default. |
 | `/cancel` | Cancel the current session's request or authentication process. |
 | `/reset` | Reset this session and remove its uploads; OS credentials remain untouched. |
@@ -214,7 +250,7 @@ Uploads are isolated as `data/uploads/<session>/<job>/file`, limited per file, a
 
 ## Native service operation
 
-Run a dry-run first; it prints the exact native definition and argv without changing the host:
+For a managed installation whose launcher directory is on PATH, use `agygram doctor` and `agygram service status`; repeat the managed installer for an update/service reconciliation and use the managed uninstaller for removal. Managed `agygram service install/uninstall` is blocked so it cannot bypass manager receipts. From a source checkout, run a dry-run first; it prints the exact native definition and argv without changing the host:
 
 ```text
 node bin/agygram.js doctor

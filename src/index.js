@@ -37,7 +37,10 @@ import {
   buildServiceStopRequestPath,
   ServiceStopRequestMonitor,
 } from './service/stop-request.js';
-import { parseFileRunnerArguments } from './service/runtime-paths.js';
+import {
+  parseFileRunnerArguments,
+  resolveRuntimeEnvFile,
+} from './service/runtime-paths.js';
 import { appendHistory, StateStore } from './state.js';
 import { BusyError, KeyedMutex, TaskManager } from './tasks.js';
 import { runWithUsage, UsageLimitError, UsageStore } from './usage-store.js';
@@ -59,16 +62,32 @@ import {
   messageThreadOptions,
 } from './telegram.js';
 import { prepareWorkspaces, resolveWorkspace } from './workspace.js';
+import { AGYGRAM_VERSION } from './version.js';
 
 const runtimeArguments = parseFileRunnerArguments(process.argv.slice(2));
-if (runtimeArguments.dataDir) process.env.DATA_DIR = runtimeArguments.dataDir;
+const pinnedServicePath = runtimeArguments.dataDir ? process.env.PATH : undefined;
+const pinnedStopRequestPath = process.env.AGYGRAM_SERVICE_STOP_REQUEST_PATH;
+const runtimeEnvFile = resolveRuntimeEnvFile({
+  projectDir: process.cwd(),
+  configuredEnvFile: runtimeArguments.envFile,
+});
 
 // On POSIX, verify the optional secret file and its full path before dotenv
 // evaluates it. Runtime data directories are checked again after config load.
 if (process.platform !== 'win32') {
-  await assertRuntimeFilesystemTrust({ envFile: path.resolve('.env'), dataDirectories: [] });
+  await assertRuntimeFilesystemTrust({ envFile: runtimeEnvFile, dataDirectories: [] });
 }
-dotenv.config({ quiet: true });
+const environmentResult = dotenv.config({
+  path: runtimeEnvFile,
+  override: runtimeArguments.envFile != null,
+  quiet: true,
+});
+if (runtimeArguments.envFile && environmentResult.error) throw environmentResult.error;
+if (runtimeArguments.dataDir) process.env.DATA_DIR = runtimeArguments.dataDir;
+if (pinnedServicePath != null) process.env.PATH = pinnedServicePath;
+if (pinnedStopRequestPath != null) {
+  process.env.AGYGRAM_SERVICE_STOP_REQUEST_PATH = pinnedStopRequestPath;
+}
 
 const HELP_TEXT = `Antigravity Telegram CLI Bot
 
@@ -188,7 +207,7 @@ async function main() {
   ])];
   if (process.platform === 'win32' && !config.windowsAclVerified) {
     throw new Error(
-      'Windows ACL verification is required. Restrict .env and DATA_DIR to the service user, then set WINDOWS_ACL_VERIFIED=true.',
+      `Windows ACL verification is required. Restrict ${runtimeEnvFile} and DATA_DIR to the service user, then set WINDOWS_ACL_VERIFIED=true.`,
     );
   }
   await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
@@ -208,7 +227,7 @@ async function main() {
     directories: managedDataDirectories,
   });
   await assertRuntimeFilesystemTrust({
-    envFile: path.resolve('.env'),
+    envFile: runtimeEnvFile,
     dataDirectories: managedDataDirectories,
     dataFiles: managedDataFiles,
     windowsAclVerified: config.windowsAclVerified,
@@ -1300,6 +1319,7 @@ async function main() {
       : `로컬 기록 폴백 ${session.history.length}턴`;
     await ctx.reply(
       [
+        `agygram: v${AGYGRAM_VERSION}`,
         `작업공간: ${cwd}`,
         `대화: ${sessionMode}`,
         `프로젝트: ${session.projectId || (session.newProject ? '다음 요청에서 새로 생성' : '자동')}`,

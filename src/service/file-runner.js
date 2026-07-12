@@ -9,6 +9,7 @@ import { appendBoundedLog, installFileConsole } from './file-console.js';
 import {
   buildServiceRuntimePaths,
   parseFileRunnerArguments,
+  resolveRuntimeEnvFile,
   resolveServiceDataDir,
 } from './runtime-paths.js';
 import { clearStaleServiceStopRequest } from './stop-request.js';
@@ -23,20 +24,35 @@ const bootstrapDirectory = path.join(os.tmpdir(), `agygram-bootstrap-${bootstrap
 const bootstrapLog = path.join(bootstrapDirectory, 'bootstrap.log');
 let loggerReady = false;
 try {
+  const runnerOptions = parseFileRunnerArguments(process.argv.slice(2));
+  const envFile = resolveRuntimeEnvFile({
+    projectDir,
+    configuredEnvFile: runnerOptions.envFile,
+  });
   if (process.platform !== 'win32') {
     await assertRuntimeFilesystemTrust({
-      envFile: path.join(projectDir, '.env'),
+      envFile,
       dataDirectories: [],
     });
   }
   const serviceEnv = {};
-  dotenv.config({
-    path: path.join(projectDir, '.env'),
+  const environmentResult = dotenv.config({
+    path: envFile,
     processEnv: serviceEnv,
     override: true,
     quiet: true,
   });
-  const runnerOptions = parseFileRunnerArguments(process.argv.slice(2));
+  if (runnerOptions.envFile && environmentResult.error) throw environmentResult.error;
+  if (process.platform === 'win32') {
+    await assertRuntimeFilesystemTrust({
+      envFile,
+      dataDirectories: [],
+      platform: 'win32',
+      windowsAclVerified: /^(?:1|true|yes|on)$/iu.test(
+        serviceEnv.WINDOWS_ACL_VERIFIED || '',
+      ),
+    });
+  }
   const dataDir = resolveServiceDataDir({
     projectDir,
     configuredDataDir: runnerOptions.dataDir,

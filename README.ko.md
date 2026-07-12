@@ -50,6 +50,42 @@ AGY_BIN=C:\Users\<Username>\AppData\Local\agy\bin\agy.exe
 
 `agy.cmd`만 발견되면 시작과 `doctor`는 실패-폐쇄됩니다. shim을 `AGY_BIN`에 넣지 말고 네이티브 `agy.exe`를 설치하거나 찾으세요.
 
+## 관리형 설치·업데이트·제거 (권장)
+
+릴리스 **0.1.0**은 애플리케이션 코드를 immutable release로 관리하고 설정·data·workspace를 외부 경로에 보존하는 사용자 단위 manager를 제공합니다. 같은 명령을 다시 실행하면 설치·업데이트 또는 launcher·설정·native service 같은 관리 상태를 복구합니다. 기존 immutable release는 무결성을 검사하지만 손상된 live code를 제자리에서 덮어쓰지는 않습니다. 네트워크 응답을 셸로 pipe하지 않고 private 임시 파일에 bootstrap을 받은 뒤 실행합니다.
+
+macOS와 Linux:
+
+```sh
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-install.XXXXXXXX") || exit; trap 'exit 1' HUP INT TERM; trap 'rm -f "$f"' 0; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.sh && [ -s "$f" ] && [ "$(wc -c < "$f")" -le 1048576 ] && sh -n "$f" && sh "$f")
+```
+
+Windows PowerShell:
+
+```powershell
+& { $ErrorActionPreference = 'Stop'; $tls = [Net.ServicePointManager]::SecurityProtocol; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; New-Item -ItemType Directory -Path $d | Out-Null; $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $grant = "*${sid}:(OI)(CI)(F)"; $systemDir = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::System); $icacls = Join-Path $systemDir 'icacls.exe'; if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw 'Could not locate system icacls.exe' }; & $icacls $d /inheritance:r /grant:r $grant | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not protect the temporary directory' }; $f = Join-Path $d 'install.ps1'; $ok = $false; for ($i = 1; $i -le 3 -and -not $ok; $i++) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 5 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.ps1' -OutFile $f; $ok = $true } catch { if ($i -eq 3) { throw }; Start-Sleep -Seconds $i } }; $n = (Get-Item -LiteralPath $f).Length; if ($n -lt 1 -or $n -gt 1MB) { throw 'Unexpected bootstrap size' }; $exe = (Get-Process -Id $PID).Path; & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f; if ($LASTEXITCODE -ne 0) { throw "Installer exited with code $LASTEXITCODE" } } finally { [Net.ServicePointManager]::SecurityProtocol = $tls; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
+```
+
+현재 0.1.0 bootstrap은 stable tag `v0.1.0`, 정확한 commit, 검증된 release digest에 고정됩니다. 이후 릴리스는 자기 bootstrap 내부 버전을 갱신하며, 그때 같은 명령을 다시 실행하면 SemVer 업데이트가 됩니다. 명시적으로 승인하지 않은 downgrade는 거부합니다.
+
+첫 실행은 외부 `.env`를 만들고 경로를 출력합니다. template에는 bot token과 allowlist가 없으므로 보통 native service를 설치하지 않은 채 끝납니다. `BOT_TOKEN`, `ALLOWED_CHAT_IDS`, 필요한 owner/user allowlist를 설정하고 같은 명령을 다시 실행하세요. Windows에서는 config 디렉터리, `.env`, data 디렉터리 DACL을 현재 사용자 전용으로 제한·검토한 뒤 `WINDOWS_ACL_VERIFIED=true`를 설정하고 재실행해야 합니다. 관리형 config가 다시 쓰이면 이 attestation이 초기화되므로 재검토해야 합니다. `agygram` 명령을 쓰려면 출력된 manager의 `bin` 경로를 PATH에 직접 추가하세요. installer는 PATH를 수정하지 않습니다.
+
+기본 제거는 설정, runtime data, workspace/project 파일, Antigravity OAuth와 system keyring credential, Linux linger 상태를 보존합니다. purge 옵션은 의도적으로 제공하지 않습니다.
+
+macOS와 Linux:
+
+```sh
+(umask 077; f=$(mktemp "${TMPDIR:-/tmp}/agygram-uninstall.XXXXXXXX") || exit; trap 'exit 1' HUP INT TERM; trap 'rm -f "$f"' 0; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 3 -o "$f" https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/uninstall.sh && [ -s "$f" ] && [ "$(wc -c < "$f")" -le 1048576 ] && sh -n "$f" && sh "$f")
+```
+
+Windows PowerShell:
+
+```powershell
+& { $ErrorActionPreference = 'Stop'; $tls = [Net.ServicePointManager]::SecurityProtocol; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-uninstall-{0}" -f [Guid]::NewGuid().ToString('N')); try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; New-Item -ItemType Directory -Path $d | Out-Null; $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $grant = "*${sid}:(OI)(CI)(F)"; $systemDir = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::System); $icacls = Join-Path $systemDir 'icacls.exe'; if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw 'Could not locate system icacls.exe' }; & $icacls $d /inheritance:r /grant:r $grant | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not protect the temporary directory' }; $f = Join-Path $d 'uninstall.ps1'; $ok = $false; for ($i = 1; $i -le 3 -and -not $ok; $i++) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 5 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/uninstall.ps1' -OutFile $f; $ok = $true } catch { if ($i -eq 3) { throw }; Start-Sleep -Seconds $i } }; $n = (Get-Item -LiteralPath $f).Length; if ($n -lt 1 -or $n -gt 1MB) { throw 'Unexpected bootstrap size' }; $exe = (Get-Process -Id $PID).Path; & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f; if ($LASTEXITCODE -ne 0) { throw "Uninstaller exited with code $LASTEXITCODE" } } finally { [Net.ServicePointManager]::SecurityProtocol = $tls; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
+```
+
+플랫폼별 정확한 경로, custom `--install-root`/`--config-file`/`--agy-bin`/`--no-service`, Windows ACL 명령, PATH 설정, checksum·GitHub attestation 검증, rollback/crash recovery, 문제 해결은 [관리형 설치·업데이트·제거 상세 문서](docs/MANAGED_INSTALL.md)를 참고하세요.
+
 ## 소스 checkout에서 설치
 
 운영용 `.env`를 다른 머신에서 복사하지 마세요. 로컬에서 만들고 secret을 쓰기 전에 권한부터 제한하세요.
@@ -121,7 +157,7 @@ OWNER_USER_IDS=858588087
 
 ## 최초 실행과 OAuth
 
-1. `npm run doctor`를 실행한 뒤 `npm start`로 실행하거나 native service를 설치합니다.
+1. 관리형 설치라면 출력된 설정/ACL 단계를 끝내고 installer가 `Service: installed`를 출력할 때까지 재실행합니다. source checkout이라면 `npm run doctor` 뒤 `npm start`로 시작하거나 native service를 설치합니다.
 2. 허용된 Telegram 채팅에서 `/start`를 보냅니다.
 3. 허용된 owner의 **개인 채팅**에서 `/auth`를 보냅니다.
 4. 표시된 URL을 아무 브라우저에서 열고 OAuth를 마친 뒤 발급 코드를 일반 메시지로 보냅니다.
@@ -148,7 +184,7 @@ OS 사용자/keyring 하나에는 이 봇이 사용하는 실질적인 `agy` 계
 | `/sandbox [on\|off]` | 세션 설정 조회 또는 명시적 변경. 정책에서 unsandboxed를 허용하지 않으면 `off`를 거부합니다. |
 | `/workspace [경로]` | 허용 root 안의 real path 조회/선택. 전환 시 대화 문맥을 초기화합니다. |
 | `/project [ID\|clear]` | 명시적 `agy` project 지정/해제 후 문맥 초기화 |
-| `/info` | 작업공간, 대화 연속성, 모델, agent, mode, sandbox 정책, 실행 여부 표시 |
+| `/info` | 실행 중인 `agygram` 버전, 작업공간, 대화 연속성, 모델, agent, mode, sandbox 정책, 실행 여부 표시 |
 | `/auth` | headless OAuth/재인증. 기본적으로 owner 전용·개인 채팅 전용입니다. |
 | `/cancel` | 현재 세션의 요청 또는 인증 프로세스 취소 |
 | `/reset` | 이 세션과 업로드 초기화. OS credential은 유지합니다. |
@@ -214,7 +250,7 @@ journal에는 정리된 request payload와 제한된 결과가 저장되므로 �
 
 ## Native service 운영
 
-먼저 dry-run으로 실제 정의와 argv를 확인하세요. dry-run은 호스트를 변경하지 않습니다.
+관리형 설치의 launcher 디렉터리를 PATH에 넣었다면 `agygram doctor`와 `agygram service status`를 사용하고, 업데이트/service 상태 복구에는 관리형 installer, 제거에는 관리형 uninstaller를 사용하세요. manager receipt 우회를 막기 위해 관리형 `agygram service install/uninstall`은 차단됩니다. source checkout에서는 먼저 dry-run으로 실제 정의와 argv를 확인하세요. dry-run은 호스트를 변경하지 않습니다.
 
 ```text
 node bin/agygram.js doctor

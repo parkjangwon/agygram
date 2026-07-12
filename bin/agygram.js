@@ -8,28 +8,36 @@ import dotenv from 'dotenv';
 
 import { loadConfig } from '../src/config.js';
 import { manageService, preflightServiceInstall } from '../src/service/index.js';
-import { resolveServiceDataDir } from '../src/service/runtime-paths.js';
+import {
+  parseFileRunnerArguments,
+  resolveRuntimeEnvFile,
+  resolveServiceDataDir,
+} from '../src/service/runtime-paths.js';
 import { assertRuntimeFilesystemTrust } from '../src/runtime-trust.js';
+import { AGYGRAM_VERSION } from '../src/version.js';
 
 const PROJECT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const USAGE = `agygram — Antigravity Telegram CLI operations
 
 Usage:
-  agygram doctor
-  agygram service install [--dry-run]
-  agygram service uninstall [--dry-run]
-  agygram service status [--dry-run]
+  agygram doctor [--config-file <path>] [--data-dir <path>]
+  agygram service install [--dry-run] [--config-file <path>] [--data-dir <path>]
+  agygram service uninstall [--dry-run] [--config-file <path>] [--data-dir <path>]
+  agygram service status [--dry-run] [--config-file <path>] [--data-dir <path>]
 
 Options:
   --dry-run               Print native service definition and argv; change nothing
   --platform <os>         darwin, linux, or win32 (dry-run only)
   --project-dir <path>    Absolute project directory (mainly packaging/testing)
   --node <path>           Absolute Node.js executable path
+  --config-file <path>    Absolute config file (default: project/.env)
+  --data-dir <path>       Absolute runtime data directory (overrides DATA_DIR)
   --home <path>           Target user's absolute home path (cross-OS dry-run)
   --uid <number>          Target macOS uid (cross-OS dry-run)
   --windows-user <id>     Target DOMAIN\\user (cross-OS dry-run)
   --no-linger             Linux: do not enable boot/logout persistence
+  -v, --version           Print the installed agygram version
   -h, --help              Show this help
 
 The service always runs as the current user so agy can access that user's OAuth
@@ -44,14 +52,19 @@ function parseOptions(args) {
     nodePath: process.execPath,
     enableLinger: true,
   };
+  const seen = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const item = args[index];
+    if (seen.has(item)) throw new Error(`Duplicate option: ${item}`);
+    seen.add(item);
     if (item === '--dry-run') result.dryRun = true;
     else if (item === '--no-linger') result.enableLinger = false;
     else if ([
       '--platform',
       '--project-dir',
       '--node',
+      '--config-file',
+      '--data-dir',
       '--home',
       '--uid',
       '--windows-user',
@@ -64,6 +77,8 @@ function parseOptions(args) {
       if (item === '--platform') result.platform = value;
       else if (item === '--project-dir') result.projectDir = value;
       else if (item === '--node') result.nodePath = value;
+      else if (item === '--config-file') result.envFile = value;
+      else if (item === '--data-dir') result.dataDir = value;
       else if (item === '--home') result.homeDir = value;
       else if (item === '--windows-user') result.windowsUserId = value;
       else {
@@ -73,6 +88,10 @@ function parseOptions(args) {
       }
     } else throw new Error(`Unknown option: ${item}`);
   }
+  parseFileRunnerArguments([
+    ...(result.dataDir ? ['--data-dir', result.dataDir] : []),
+    ...(result.envFile ? ['--config-file', result.envFile] : []),
+  ], result.platform ?? process.platform);
   return result;
 }
 
@@ -81,6 +100,8 @@ const SERVICE_ENV_KEYS = [
   'USERPROFILE',
   'LOCALAPPDATA',
   'APPDATA',
+  'USERNAME',
+  'USERDOMAIN',
   'HOMEDRIVE',
   'HOMEPATH',
   'PATH',
@@ -100,7 +121,7 @@ const SERVICE_ENV_KEYS = [
   'LC_CTYPE',
 ];
 
-// Only application configuration is imported from .env. In particular,
+// Only application configuration is imported from the selected env file. In particular,
 // Node/loader startup controls such as NODE_OPTIONS, LD_PRELOAD and DYLD_*
 // must never reach the doctor child process.
 const SERVICE_CONFIG_KEYS = new Set([
@@ -172,16 +193,18 @@ const SERVICE_CONFIG_KEYS = new Set([
   'WORKSPACE_DIR',
 ]);
 
-function loadServiceEnvironment(projectDir, source = process.env) {
-  const env = {};
-  for (const key of SERVICE_ENV_KEYS) {
-    if (source[key] != null) env[key] = source[key];
-  }
+function loadServiceEnvironment(
+  projectDir,
+  source = process.env,
+  envFile = path.join(projectDir, '.env'),
+  { required = false } = {},
+) {
+  const env = loadServiceManagerEnvironment(source);
   let parsed = {};
   try {
-    parsed = dotenv.parse(readFileSync(path.join(projectDir, '.env')));
+    parsed = dotenv.parse(readFileSync(envFile));
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (required || error.code !== 'ENOENT') throw error;
   }
   for (const [key, value] of Object.entries(parsed)) {
     if (SERVICE_CONFIG_KEYS.has(key)) env[key] = value;
@@ -189,23 +212,43 @@ function loadServiceEnvironment(projectDir, source = process.env) {
   return env;
 }
 
-function verifyServiceConfig(projectDir, env) {
+function loadServiceManagerEnvironment(source = process.env) {
+  const env = {};
+  for (const key of SERVICE_ENV_KEYS) {
+    if (source[key] != null) env[key] = source[key];
+  }
+  return env;
+}
+
+function verifyServiceConfig(projectDir, env, envFile = path.join(projectDir, '.env')) {
   const config = loadConfig(env, projectDir);
   if (!path.isAbsolute(config.agyBin)) {
     throw new Error(
-      'agy must resolve to an absolute executable for service operation; set an absolute AGY_BIN in .env',
+      `agy must resolve to an absolute executable for service operation; set an absolute AGY_BIN in ${envFile}`,
     );
   }
   return config;
+}
+
+function buildDoctorArguments({ projectDir, dataDir, envFile }) {
+  return [
+    '--',
+    path.join(projectDir, 'src', 'doctor.js'),
+    ...(dataDir ? ['--data-dir', dataDir] : []),
+    ...(envFile ? ['--config-file', envFile] : []),
+  ];
 }
 
 async function runDoctor({
   projectDir = PROJECT_DIR,
   nodePath = process.execPath,
   env = process.env,
+  envFile,
+  dataDir,
 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(nodePath, [path.join(projectDir, 'src', 'doctor.js')], {
+    const childArguments = buildDoctorArguments({ projectDir, dataDir, envFile });
+    const child = spawn(nodePath, childArguments, {
       cwd: projectDir,
       env,
       stdio: 'inherit',
@@ -221,21 +264,45 @@ async function runDoctor({
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  if (argv.length === 0 || argv.includes('-h') || argv.includes('--help')) {
+  const isHelp = (value) => value === '-h' || value === '--help';
+  if (argv.length === 1 && (argv[0] === '-v' || argv[0] === '--version')) {
+    process.stdout.write(`${AGYGRAM_VERSION}\n`);
+    return 0;
+  }
+  if (argv.length === 0 || (argv.length === 1 && isHelp(argv[0]))) {
     process.stdout.write(USAGE);
     return 0;
   }
 
-  const [command, action, ...rest] = argv;
+  const [command, ...commandArguments] = argv;
   if (command === 'doctor') {
-    if (action != null) throw new Error('doctor does not accept arguments');
-    return runDoctor();
+    if (commandArguments.length === 1 && isHelp(commandArguments[0])) {
+      process.stdout.write(USAGE);
+      return 0;
+    }
+    const doctorOptions = parseFileRunnerArguments(commandArguments);
+    return runDoctor(doctorOptions);
+  }
+  const [action, ...rest] = commandArguments;
+  if (
+    command === 'service' &&
+    ((isHelp(action) && rest.length === 0) ||
+      (['install', 'uninstall', 'status'].includes(action) && rest.length === 1 && isHelp(rest[0])))
+  ) {
+    process.stdout.write(USAGE);
+    return 0;
   }
   if (command !== 'service' || !['install', 'uninstall', 'status'].includes(action)) {
     throw new Error(`Unknown command: ${argv.join(' ')}`);
   }
 
   const options = parseOptions(rest);
+  const explicitEnvFile = options.envFile != null;
+  options.envFile = resolveRuntimeEnvFile({
+    projectDir: options.projectDir,
+    configuredEnvFile: options.envFile,
+    platform: options.platform ?? process.platform,
+  });
   if (options.platform && options.platform !== process.platform && !options.dryRun) {
     throw new Error('--platform may only be used with --dry-run');
   }
@@ -248,22 +315,51 @@ export async function main(argv = process.argv.slice(2)) {
   const nativeTarget = options.platform == null || options.platform === process.platform;
   let serviceEnv;
   if (nativeTarget) {
-    if (process.platform !== 'win32') {
-      await assertRuntimeFilesystemTrust({
-        envFile: path.join(options.projectDir, '.env'),
-        dataDirectories: [],
-      });
+    if (action === 'uninstall') {
+      // Service removal must remain possible after the external configuration
+      // has been deleted, moved, or made unreadable. Never parse or execute
+      // configuration on this path: the native definition is located from the
+      // current user's sanitized OS environment and the explicitly pinned data
+      // directory supplied by the managed uninstaller.
+      options.commandEnvironment = loadServiceManagerEnvironment(process.env);
+      serviceEnv = { ...options.commandEnvironment };
+    } else {
+      if (process.platform !== 'win32') {
+        await assertRuntimeFilesystemTrust({
+          envFile: options.envFile,
+          dataDirectories: [],
+        });
+      }
+      serviceEnv = loadServiceEnvironment(
+        options.projectDir,
+        process.env,
+        options.envFile,
+        { required: explicitEnvFile },
+      );
+      if (process.platform === 'win32') {
+        await assertRuntimeFilesystemTrust({
+          envFile: options.envFile,
+          dataDirectories: [],
+          platform: 'win32',
+          windowsAclVerified: /^(?:1|true|yes|on)$/iu.test(
+            serviceEnv.WINDOWS_ACL_VERIFIED || '',
+          ),
+        });
+      }
     }
-    serviceEnv = loadServiceEnvironment(options.projectDir);
     options.environmentPath = serviceEnv.PATH;
     options.env = serviceEnv;
     options.dataDir = resolveServiceDataDir({
       projectDir: options.projectDir,
+      configuredDataDir: options.dataDir,
       env: serviceEnv,
     });
+    // A command-line data directory is a deliberate higher-priority pin. The
+    // doctor child must validate the same layout that the service will use.
+    serviceEnv.DATA_DIR = options.dataDir;
   }
   if (action === 'install' && nativeTarget) {
-    const serviceConfig = verifyServiceConfig(options.projectDir, serviceEnv);
+    const serviceConfig = verifyServiceConfig(options.projectDir, serviceEnv, options.envFile);
     options.agyBin = serviceConfig.agyBin;
     options.dataDir = serviceConfig.dataDir;
     options.trustedGroupGids = serviceConfig.trustedServiceGroupGids;
@@ -278,7 +374,7 @@ export async function main(argv = process.argv.slice(2)) {
       }
     }
   } else if (action === 'install' && options.dryRun) {
-    options.previewNote = 'cross-OS structural preview; target .env and PATH were not read';
+    options.previewNote = 'cross-OS structural preview; target environment file and PATH were not read';
   }
   await manageService(action, options);
   return 0;
@@ -297,8 +393,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 export const _private = {
   parseOptions,
+  buildDoctorArguments,
   runDoctor,
   loadServiceEnvironment,
+  loadServiceManagerEnvironment,
   verifyServiceConfig,
   PROJECT_DIR,
   SERVICE_ENV_KEYS,

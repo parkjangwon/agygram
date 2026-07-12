@@ -13,17 +13,57 @@ function assertCleanPath(value, name) {
   }
 }
 
+function isFullyAbsolute(value, platform) {
+  return platform === 'win32'
+    ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)/u.test(value)
+    : path.posix.isAbsolute(value);
+}
+
+function assertAbsoluteRuntimePath(value, name, platform) {
+  assertCleanPath(value, name);
+  if (!isFullyAbsolute(value, platform)) {
+    throw new Error(`${name} must be absolute`);
+  }
+}
+
 export function parseFileRunnerArguments(argv, platform = process.platform) {
   if (!Array.isArray(argv)) throw new TypeError('file-runner argv must be an array');
-  if (argv.length === 0) return {};
-  if (argv.length !== 2 || argv[0] !== '--data-dir') {
-    throw new Error('file-runner accepts only --data-dir <absolute-path>');
+  const options = {};
+  const names = new Map([
+    ['--data-dir', ['dataDir', 'runtime data directory']],
+    ['--config-file', ['envFile', 'runtime configuration file']],
+  ]);
+  const seen = new Set();
+  for (let index = 0; index < argv.length; index += 1) {
+    const option = argv[index];
+    const definition = names.get(option);
+    if (!definition) {
+      throw new Error(`Unknown runtime option: ${option}`);
+    }
+    if (seen.has(option)) throw new Error(`Duplicate runtime option: ${option}`);
+    seen.add(option);
+    const value = argv[index + 1];
+    if (value == null || names.has(value) || value.startsWith('--')) {
+      throw new Error(`Missing value after ${option}`);
+    }
+    index += 1;
+    const [property, label] = definition;
+    assertAbsoluteRuntimePath(value, label, platform);
+    options[property] = value;
   }
-  assertCleanPath(argv[1], 'file-runner data directory');
-  if (!pathFor(platform).isAbsolute(argv[1])) {
-    throw new Error('file-runner data directory must be absolute');
-  }
-  return { dataDir: argv[1] };
+  return options;
+}
+
+export function resolveRuntimeEnvFile({
+  projectDir,
+  configuredEnvFile,
+  platform = process.platform,
+}) {
+  const pathApi = pathFor(platform);
+  assertAbsoluteRuntimePath(projectDir, 'project directory', platform);
+  const selected = configuredEnvFile ?? pathApi.join(projectDir, '.env');
+  assertAbsoluteRuntimePath(selected, 'runtime environment file', platform);
+  return pathApi.resolve(selected);
 }
 
 export function resolveServiceDataDir({
