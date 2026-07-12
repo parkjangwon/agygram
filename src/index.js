@@ -1430,6 +1430,29 @@ async function main() {
     );
   });
 
+  // The tmux OAuth transport uses agy's real interactive TTY flow. These
+  // owner-only helpers supply the two keys Telegram cannot express as normal
+  // text: Enter for an on-screen default and /exit once onboarding is done.
+  bot.command('auth_enter', async (ctx) => {
+    const chatId = sessionKey(ctx);
+    if (authOwners.get(chatId) !== String(ctx.from?.id) || !auth.isActive(chatId)) {
+      await ctx.reply('진행 중인 소유자 인증이 없습니다.');
+      return;
+    }
+    auth.input(chatId, '');
+    await ctx.reply('인증 터미널에 Enter 키를 전달했습니다.');
+  });
+
+  bot.command('auth_exit', async (ctx) => {
+    const chatId = sessionKey(ctx);
+    if (authOwners.get(chatId) !== String(ctx.from?.id) || !auth.isActive(chatId)) {
+      await ctx.reply('진행 중인 소유자 인증이 없습니다.');
+      return;
+    }
+    auth.input(chatId, '/exit');
+    await ctx.reply('인증 터미널에 /exit을 전달했습니다.');
+  });
+
   bot.on('document', async (ctx) => {
     if (auth.hasAnyActive()) {
       await jobs.markUpdateSeen(ctx.update?.update_id, { decision: 'rejected' });
