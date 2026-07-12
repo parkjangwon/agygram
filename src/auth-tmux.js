@@ -20,7 +20,18 @@ if (!agyBin || !cwd || agyArgs.length === 0 || process.platform === 'win32') usa
 
 const tmux = process.env.AGY_AUTH_TMUX_BIN || 'tmux';
 const session = `agygram-auth-${randomUUID().replaceAll('-', '')}`;
-const command = [agyBin, ...agyArgs].map(quote).join(' ');
+// `agy --print` takes a separate non-interactive OAuth path that hard-limits
+// code entry to 30 seconds, even inside a TTY. Keep safe execution options
+// (such as --mode), but deliberately remove print-mode controls here.
+const interactiveArgs = [];
+for (let index = 0; index < agyArgs.length; index += 1) {
+  if (agyArgs[index] === '--print' || agyArgs[index] === '--prompt' || agyArgs[index] === '--print-timeout') {
+    index += 1;
+    continue;
+  }
+  interactiveArgs.push(agyArgs[index]);
+}
+const command = [agyBin, ...interactiveArgs].map(quote).join(' ');
 let lastOutput = '';
 let ended = false;
 let sawFailure = false;
