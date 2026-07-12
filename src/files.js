@@ -81,12 +81,13 @@ function createCombinedAbort(signal, timeoutMs) {
   if (signal?.aborted) onAbort();
   else signal?.addEventListener('abort', onAbort, { once: true });
 
+  // Keep this referenced: a hung transport may leave the deadline as the only
+  // active handle capable of settling the caller's awaited operation.
   const timer = setTimeout(() => {
     if (!controller.signal.aborted) {
       controller.abort(new DOMException('Telegram file download timed out', 'TimeoutError'));
     }
   }, timeoutMs);
-  timer.unref?.();
 
   return {
     signal: controller.signal,
