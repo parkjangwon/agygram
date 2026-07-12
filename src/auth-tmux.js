@@ -35,7 +35,9 @@ const command = [agyBin, ...interactiveArgs].map(quote).join(' ');
 let lastOutput = '';
 let ended = false;
 let sawFailure = false;
-let loginMethodSelected = false;
+let pollTimer = null;
+let automation = Promise.resolve();
+const completedStages = new Set();
 
 async function tmuxCommand(args, options = {}) {
   return execFileAsync(tmux, args, {
@@ -60,7 +62,69 @@ async function finish(code) {
   ended = true;
   clearInterval(pollTimer);
   await killSession();
+  if (code === 0 && !sawFailure) {
+    process.stdout.write('OAuth 완료 후 headless agy 요청으로 인증을 확인하는 중입니다...\n');
+    code = await verifyAuthentication() ? 0 : 1;
+  }
   process.exitCode = code;
+}
+
+function pause(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function automate(stage, keys) {
+  if (completedStages.has(stage) || ended) return;
+  completedStages.add(stage);
+  automation = automation.then(async () => {
+    for (const key of keys) {
+      if (ended) return;
+      await tmuxCommand(['send-keys', '-t', session, key]);
+      await pause(120);
+    }
+  }).catch((error) => {
+    sawFailure = true;
+    process.stderr.write(`OAuth TTY automation failed: ${error.message}\n`);
+    killSession().catch(() => {});
+  });
+}
+
+function verifyAuthentication() {
+  return new Promise((resolve) => {
+    const child = spawn(agyBin, [
+      '--mode', 'plan', '--print-timeout', '60s', '--print',
+      'Reply with exactly AGY_AUTH_OK. Do not use tools or modify files.',
+    ], {
+      cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+    let output = '';
+    let timedOut = false;
+    const append = (chunk) => {
+      output = `${output}${chunk}`.slice(-32 * 1024);
+    };
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, 65_000);
+    child.once('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    child.once('close', (exitCode) => {
+      clearTimeout(timer);
+      const verified = !timedOut && exitCode === 0 && /\bAGY_AUTH_OK\b/.test(output);
+      process.stdout.write(verified
+        ? 'AGY_AUTH_OK\n'
+        : '인증 확인 요청이 실패했습니다. /auth 를 다시 실행하세요.\n');
+      resolve(verified);
+    });
+  });
 }
 
 async function poll() {
@@ -74,9 +138,18 @@ async function poll() {
         sawFailure = true;
       }
       process.stdout.write(`${output}\n`);
-      if (!loginMethodSelected && /select login method/i.test(output)) {
-        loginMethodSelected = true;
-        tmuxCommand(['send-keys', '-t', session, 'Enter']).catch(() => {});
+      if (/select login method/i.test(output)) automate('login-method', ['Enter']);
+      if (/choose your color scheme/i.test(output)) automate('color-scheme', ['Enter']);
+      // The default consent screen opts into interaction-data collection. Keep
+      // that optional analytics checkbox off, then accept the displayed terms.
+      if (/terms of service & data use/i.test(output)) {
+        automate('terms', ['Enter', 'Down', 'Right', 'Enter']);
+      }
+      if (/do you trust the contents of this project/i.test(output)) automate('workspace-trust', ['Enter']);
+      if (/\? for shortcuts/.test(output) && /plan mode|code mode/i.test(output)) {
+        // agy's command palette may autocomplete `/exit` rather than execute
+        // it. Two Ctrl-C presses are its documented unambiguous clean exit.
+        automate('exit', ['C-c', 'C-c']);
       }
     }
   } catch {
@@ -119,7 +192,7 @@ try {
   process.exit();
 }
 
-const pollTimer = setInterval(() => {
+pollTimer = setInterval(() => {
   poll().catch(() => finish(1));
 }, 350);
 poll().catch(() => finish(1));

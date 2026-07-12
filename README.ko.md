@@ -52,7 +52,7 @@ AGY_BIN=C:\Users\<Username>\AppData\Local\agy\bin\agy.exe
 
 ## 관리형 설치·업데이트·제거 (권장)
 
-릴리스 **0.1.0**은 애플리케이션 코드를 immutable release로 관리하고 설정·data·workspace를 외부 경로에 보존하는 사용자 단위 manager를 제공합니다. 같은 명령을 다시 실행하면 설치·업데이트 또는 launcher·설정·native service 같은 관리 상태를 복구합니다. 기존 immutable release는 무결성을 검사하지만 손상된 live code를 제자리에서 덮어쓰지는 않습니다. 네트워크 응답을 셸로 pipe하지 않고 private 임시 파일에 bootstrap을 받은 뒤 실행합니다.
+릴리스 **0.1.1**은 애플리케이션 코드를 immutable release로 관리하고 설정·data·workspace를 외부 경로에 보존하는 사용자 단위 manager를 제공합니다. 같은 명령을 다시 실행하면 설치·업데이트 또는 launcher·설정·native service 같은 관리 상태를 복구합니다. 기존 immutable release는 무결성을 검사하지만 손상된 live code를 제자리에서 덮어쓰지는 않습니다. 네트워크 응답을 셸로 pipe하지 않고 private 임시 파일에 bootstrap을 받은 뒤 실행합니다.
 
 macOS와 Linux:
 
@@ -66,7 +66,7 @@ Windows PowerShell:
 & { $ErrorActionPreference = 'Stop'; $tls = [Net.ServicePointManager]::SecurityProtocol; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; New-Item -ItemType Directory -Path $d | Out-Null; $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $grant = "*${sid}:(OI)(CI)(F)"; $systemDir = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::System); $icacls = Join-Path $systemDir 'icacls.exe'; if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw 'Could not locate system icacls.exe' }; & $icacls $d /inheritance:r /grant:r $grant | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not protect the temporary directory' }; $f = Join-Path $d 'install.ps1'; $ok = $false; for ($i = 1; $i -le 3 -and -not $ok; $i++) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 5 -Uri 'https://github.com/parkjangwon/antigravity-telegram-cli/releases/latest/download/install.ps1' -OutFile $f; $ok = $true } catch { if ($i -eq 3) { throw }; Start-Sleep -Seconds $i } }; $n = (Get-Item -LiteralPath $f).Length; if ($n -lt 1 -or $n -gt 1MB) { throw 'Unexpected bootstrap size' }; $exe = (Get-Process -Id $PID).Path; & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f; if ($LASTEXITCODE -ne 0) { throw "Installer exited with code $LASTEXITCODE" } } finally { [Net.ServicePointManager]::SecurityProtocol = $tls; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
 ```
 
-현재 0.1.0 bootstrap은 stable tag `v0.1.0`, 정확한 commit, 검증된 release digest에 고정됩니다. 이후 릴리스는 자기 bootstrap 내부 버전을 갱신하며, 그때 같은 명령을 다시 실행하면 SemVer 업데이트가 됩니다. 명시적으로 승인하지 않은 downgrade는 거부합니다.
+현재 0.1.1 bootstrap은 stable tag `v0.1.1`, 정확한 commit, 검증된 release digest에 고정됩니다. 이후 릴리스는 자기 bootstrap 내부 버전을 갱신하며, 그때 같은 명령을 다시 실행하면 SemVer 업데이트가 됩니다. 명시적으로 승인하지 않은 downgrade는 거부합니다.
 
 첫 실행은 외부 `.env`를 만들고 경로를 출력합니다. template에는 bot token과 allowlist가 없으므로 보통 native service를 설치하지 않은 채 끝납니다. `BOT_TOKEN`, `ALLOWED_CHAT_IDS`, 필요한 owner/user allowlist를 설정하고 같은 명령을 다시 실행하세요. Windows에서는 config 디렉터리, `.env`, data 디렉터리 DACL을 현재 사용자 전용으로 제한·검토한 뒤 `WINDOWS_ACL_VERIFIED=true`를 설정하고 재실행해야 합니다. 관리형 config가 다시 쓰이면 이 attestation이 초기화되므로 재검토해야 합니다. `agygram` 명령을 쓰려면 출력된 manager의 `bin` 경로를 PATH에 직접 추가하세요. installer는 PATH를 수정하지 않습니다.
 

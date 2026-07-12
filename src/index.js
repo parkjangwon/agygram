@@ -1400,11 +1400,11 @@ async function main() {
       return;
     }
     try {
-      await replyLong(
-        ctx,
-        'agy headless OAuth 프로세스를 시작했습니다. 잠시 후 표시되는 URL을 브라우저에서 열고, ' +
-          '발급된 인증 코드를 일반 텍스트로 보내세요. 봇은 코드를 stdin으로 전달한 뒤 Telegram 메시지 삭제를 시도합니다. ' +
-          '중단하려면 /cancel 을 사용하세요.',
+        await replyLong(
+          ctx,
+        'agy headless OAuth 프로세스를 시작했습니다. 표시되는 URL을 브라우저에서 열고, ' +
+          '발급된 인증 코드를 일반 텍스트로 보내세요. 최초 테마·약관·워크스페이스 설정은 안전한 기본값으로 자동 완료하고, ' +
+          '마지막에 실제 headless agy 요청으로 인증을 검증합니다. 중단하려면 /cancel 을 사용하세요.',
       );
     } catch (error) {
       console.error('Auth start notification failed', { name: error.name, code: error.code });
