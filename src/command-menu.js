@@ -2,6 +2,7 @@ import { retryTelegramCall } from './telegram.js';
 
 export const BOT_COMMANDS = Object.freeze([
   { command: 'start', description: '봇 시작 및 인증 상태 확인' },
+  { command: 'menu', description: 'Telegram 버튼 조작 패널 열기' },
   { command: 'plan', description: '수정 없이 구현 계획 생성' },
   { command: 'apply', description: '직전 계획을 sandbox에서 구현' },
   { command: 'new', description: '새 대화와 agy 프로젝트 시작' },

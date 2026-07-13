@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { stripVTControlCharacters } from 'node:util';
 
 const separator = process.argv.indexOf('--');
 if (separator < 3) throw new Error('Usage: auth-pty.js <agy-bin> <cwd> -- <agy arguments>');
@@ -17,10 +18,52 @@ let ended = false;
 let failed = false;
 let screen = '';
 let timer = null;
+let lastOutput = '';
 const stages = new Set();
 let chain = Promise.resolve();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-function output() { timer = null; if (screen) process.stdout.write(`${screen}\n`); }
+function cleanPtyOutput(value) {
+  return stripVTControlCharacters(String(value ?? ''))
+    .replace(/\u001b\[[0-9:;<=>?]*[ -/]*[@-~]/gu, '')
+    .replace(/(?:^|\n)(?:(?:\d+(?:;\d+)*m)|(?:\d+;\d+u))+/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+}
+function meaningfulPtyOutput(value) {
+  const text = cleanPtyOutput(value);
+  if (!text) return '';
+  const url = text.match(/https?:\/\/[^\s<>()]+/iu)?.[0];
+  if (url) {
+    return [
+      'agy 인증 URL입니다.',
+      '',
+      url,
+      '',
+      '브라우저에서 인증을 완료한 뒤 표시되는 authorization code를 이 텔레그램 채팅에 그대로 보내세요.',
+    ].join('\n');
+  }
+  if (/authorization code|copy the code|paste the authorization/i.test(text)) {
+    return '브라우저 인증 후 표시되는 authorization code를 이 텔레그램 채팅에 그대로 보내세요.';
+  }
+  if (!/authentication (?:failed|timed out)|oauth setup failed|invalid authorization/i.test(text)) return '';
+  return text
+    .split('\n')
+    .filter((line) => !/^\s*[⣾⣷⣯⣟⡿⢿⣻⣽]\s*(?:Signing in\.\.\.)?\s*$/u.test(line))
+    .slice(-12)
+    .join('\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+}
+function output() {
+  timer = null;
+  const visible = meaningfulPtyOutput(screen);
+  if (visible && visible !== lastOutput) {
+    lastOutput = visible;
+    process.stdout.write(`${visible}\n`);
+  }
+}
 function automate(stage, keys) {
   if (stages.has(stage) || ended) return;
   stages.add(stage);
@@ -56,7 +99,7 @@ async function finish(code, shouldVerify = true) {
 }
 child = pty.spawn(agyBin, args, { name: 'xterm-256color', cols: 120, rows: 32, cwd, env: { ...process.env, TERM: 'xterm-256color' } });
 child.onData((chunk) => {
-  screen = `${screen}${chunk}`.replace(/\u001b\[[\d;?]*[A-Za-z]/g, '').slice(-20000);
+  screen = cleanPtyOutput(`${screen}${chunk}`).slice(-20000);
   inspect();
   if (!timer) timer = setTimeout(output, 300);
 });

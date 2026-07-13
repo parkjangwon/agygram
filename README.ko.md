@@ -26,11 +26,11 @@ Windows PowerShell:
 2. 봇에게 `/start` 전송 후 private chat ID와 owner user ID 자동 탐지
 3. `agy` 탐색, private `.env` 작성, data/workspace 생성, 플랫폼 검사가 통과하면 사용자 서비스 설치
 
-그 다음 Telegram에서 봇에게 `/auth`를 보내세요. 봇이 Antigravity OAuth URL을 보여주고, 브라우저에서 받은 코드를 Telegram 메시지로 보내면 실제 headless 요청으로 인증을 검증합니다.
+그 다음 Telegram에서 봇에게 `/auth` 또는 `/menu`를 보내세요. agygram은 버튼 우선 UX입니다. 인증, model/agent/skill 선택, 실행 모드, 상태 확인, 업데이트, 결과 복구를 명령어 암기 없이 누를 수 있습니다. OAuth 중에는 필요한 URL/코드 안내만 보여주고 Antigravity TUI 잡음은 숨깁니다.
 
 ## 제공 기능
 
-- Telegram에서 `agy` 제어: 대화, plan/apply, 버튼 기반 model/agent/skill/mode 전환, 업로드, 작업 기록, 재시도, 결과 복구
+- Telegram-native `agy` 제어: 대화, plan/apply, `/menu` 버튼 패널, 버튼 기반 model/agent/skill/mode 전환, 업로드, 작업 기록, 재시도, 결과 복구
 - 원격 Linux 서버 같은 no-IDE 환경을 위한 headless OAuth
 - 사용자 단위 native service: macOS launchd, Linux systemd user service, Windows Task Scheduler
 - 검증된 릴리즈 설치/업데이트와 data 보존 언인스톨
@@ -54,6 +54,7 @@ agygram setup
 | 명령 | 용도 |
 | --- | --- |
 | 일반 메시지 | 선택된 workspace에서 `agy` 요청 실행 |
+| `/menu` / `/help` | Telegram 버튼 조작 패널 열기. `/help full`은 전체 텍스트 명령 목록 출력 |
 | `/plan <요청>` / `/apply [추가 지시]` | 계획 생성 후 sandbox code 모드로 적용 |
 | `/new`, `/workspace`, `/project` | 새 대화 또는 프로젝트 문맥 전환 |
 | `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, `/yolo` | Telegram 버튼으로 실행 설정 조회/변경. `/skills 검색어`로 긴 skill 목록 검색 |

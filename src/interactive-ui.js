@@ -1,10 +1,13 @@
 import { randomBytes } from 'node:crypto';
 
 export const INTERACTIVE_CALLBACK_PATTERN = /^ui:([A-Za-z0-9_-]{12}):(\d+)$/;
+export const ACTION_CALLBACK_PATTERN = /^tg:([a-z][a-z0-9_-]{0,31})$/;
 export const INTERACTIVE_MENU_TTL_MS = 10 * 60 * 1_000;
 
 const CALLBACK_PREFIX = 'ui';
+const ACTION_CALLBACK_PREFIX = 'tg';
 const MAX_BUTTON_LABEL_CHARS = 60;
+const ACTION_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
 export function createMenuToken() {
   return randomBytes(9).toString('base64url');
@@ -34,6 +37,21 @@ export function buildChoiceKeyboard(token, choices, { columns = 1 } = {}) {
   return { inline_keyboard: rows };
 }
 
+export function buildActionKeyboard(rows) {
+  return {
+    inline_keyboard: rows.map((row) => row.map((button) => {
+      const action = String(button.action || '');
+      if (!ACTION_NAME_PATTERN.test(action)) {
+        throw new Error(`Invalid Telegram action callback: ${action}`);
+      }
+      return {
+        text: truncateButtonLabel(button.label),
+        callback_data: `${ACTION_CALLBACK_PREFIX}:${action}`,
+      };
+    })),
+  };
+}
+
 export function parseChoiceCallback(data) {
   const match = String(data || '').match(INTERACTIVE_CALLBACK_PATTERN);
   if (!match) return null;
@@ -41,6 +59,11 @@ export function parseChoiceCallback(data) {
     token: match[1],
     index: Number(match[2]),
   };
+}
+
+export function parseActionCallback(data) {
+  const match = String(data || '').match(ACTION_CALLBACK_PATTERN);
+  return match ? match[1] : null;
 }
 
 export function currentMarker(value, current) {

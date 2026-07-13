@@ -50,6 +50,19 @@ test('terminal cleanup strips control codes and redacts the latest input', () =>
   assert.match(cleaned, /\[입력 숨김\]/);
 });
 
+test('terminal cleanup removes auth PTY noise and internal success tokens', () => {
+  const cleaned = authPrivate.cleanTerminalOutput([
+    '4m0;1u4;2m1;1u',
+    '⣾  Signing in...',
+    'AGY_AUTH_OK',
+    'OAuth ready',
+  ].join('\n'));
+
+  assert.equal(cleaned.includes('4m0;1u'), false);
+  assert.equal(cleaned.includes('AGY_AUTH_OK'), false);
+  assert.match(cleaned, /OAuth ready/u);
+});
+
 test('AuthManager remains busy until a cancelled process-tree lease completes', { skip: process.platform === 'win32' }, async (t) => {
   const root = await temporaryDirectory(t);
   const pidFile = path.join(root, 'auth-descendant.pid');

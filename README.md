@@ -26,11 +26,11 @@ The setup wizard will:
 2. Ask you to send `/start` to the bot, then auto-detect your private chat ID and owner user ID.
 3. Find `agy`, write a private `.env`, create data/workspace directories, and install the native user service when the platform checks pass.
 
-Then open Telegram and send `/auth` to the bot. It will show the Antigravity OAuth URL, accept the returned code as a Telegram message, and verify the credential with a real headless request.
+Then open Telegram and send `/auth` or `/menu` to the bot. The menu is button-first: authentication, model/agent/skill selection, execution mode, status, update checks, and result recovery are reachable without memorizing commands. During OAuth the bot shows only the useful URL/code prompts and hides Antigravity TUI noise.
 
 ## What You Get
 
-- Telegram control for `agy`: chat, plan/apply, button-based model/agent/skill/mode switching, uploads, jobs, retries, and result recovery.
+- Telegram-native control for `agy`: chat, plan/apply, a `/menu` button panel, button-based model/agent/skill/mode switching, uploads, jobs, retries, and result recovery.
 - Headless OAuth designed for remote Linux servers and other no-IDE environments.
 - Managed per-user service: launchd on macOS, systemd user service on Linux, Task Scheduler on Windows.
 - Verified release installer/updater and data-preserving uninstaller.
@@ -54,6 +54,7 @@ Rerun the same install command any time to update or repair the managed installa
 | Command | Purpose |
 | --- | --- |
 | Plain text | Send a request to `agy` in the selected workspace. |
+| `/menu` / `/help` | Open the Telegram button control panel. `/help full` prints the full text command list. |
 | `/plan <request>` / `/apply [notes]` | Create a plan, then apply it in sandboxed code mode. |
 | `/new`, `/workspace`, `/project` | Start fresh or change project context. |
 | `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, `/yolo` | Open Telegram buttons to inspect or change execution settings. `/skills query` searches long skill lists. |

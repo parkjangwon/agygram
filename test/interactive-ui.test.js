@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildActionKeyboard,
   buildChoiceKeyboard,
   createChoiceMenu,
   currentMarker,
   formatChoiceMenuText,
+  parseActionCallback,
   parseChoiceCallback,
   truncateButtonLabel,
 } from '../src/interactive-ui.js';
@@ -35,6 +37,32 @@ test('interactive choice keyboard supports compact rows', () => {
   assert.equal(keyboard.inline_keyboard.length, 2);
   assert.equal(keyboard.inline_keyboard[0].length, 2);
   assert.equal(keyboard.inline_keyboard[1].length, 1);
+});
+
+test('telegram action keyboard uses stable short callback data', () => {
+  const keyboard = buildActionKeyboard([
+    [
+      { label: '상태', action: 'status' },
+      { label: '실행 모드', action: 'mode' },
+    ],
+    [{ label: '업데이트 적용', action: 'update_apply' }],
+  ]);
+
+  assert.deepEqual(keyboard.inline_keyboard[0][0], {
+    text: '상태',
+    callback_data: 'tg:status',
+  });
+  assert.equal(keyboard.inline_keyboard[0][1].callback_data, 'tg:mode');
+  assert.equal(keyboard.inline_keyboard[1][0].callback_data, 'tg:update_apply');
+  assert.equal(parseActionCallback('tg:update_apply'), 'update_apply');
+  assert.equal(parseActionCallback('ui:abcABC123_-_:1'), null);
+});
+
+test('telegram action keyboard rejects invalid callback names', () => {
+  assert.throws(
+    () => buildActionKeyboard([[{ label: 'bad', action: '../bad' }]]),
+    /Invalid Telegram action callback/,
+  );
 });
 
 test('interactive callback parser rejects non-menu data', () => {

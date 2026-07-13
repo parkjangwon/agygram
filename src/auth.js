@@ -8,8 +8,13 @@ import { terminateProcess } from './agy.js';
 
 function cleanTerminalOutput(value, secret = '') {
   let text = stripVTControlCharacters(String(value ?? ''))
+    .replace(/(?:^|\n)(?:(?:\d+(?:;\d+)*m)|(?:\d+;\d+u))+/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .split('\n')
+    .filter((line) => !/^\s*AGY_AUTH_OK\s*$/u.test(line))
+    .filter((line) => !/^\s*[⣾⣷⣯⣟⡿⢿⣻⣽]\s*(?:Signing in\.\.\.)?\s*$/u.test(line))
+    .join('\n')
     .replace(/\n{4,}/g, '\n\n\n');
   if (secret && secret.length >= 3) text = text.split(secret).join('[입력 숨김]');
   return text.trim();

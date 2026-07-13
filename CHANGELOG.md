@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.5 — 2026-07-13
+
+- Make Telegram OAuth output action-focused: show only the auth URL, code
+  prompt, errors, and final result instead of streaming Antigravity TUI frames.
+- Strip PTY keyboard-protocol fragments, spinner frames, and the internal
+  `AGY_AUTH_OK` verification token from Telegram auth messages.
+- Add a Telegram-native `/menu` button panel for status, session info, model,
+  agent, skill, mode, sandbox, YOLO, auth, update, jobs, and last-result access.
+- Make `/help` concise and button-first while preserving the full command list
+  through `/help full`.
+
 ## 0.3.4 — 2026-07-13
 
 - Keep managed update scheduling path handling portable across POSIX and

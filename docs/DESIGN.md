@@ -50,6 +50,11 @@ An administrator must opt in to any unsandboxed run with `ALLOW_UNSANDBOXED_RUNS
 
 `/plan` applies a one-shot `mode=plan` override. `/apply` requires that the immediately recorded last run was a successful plan and that a native conversation ID is present. It continues that conversation with a one-shot `mode=accept-edits` override and, by default, `sandbox=true`. Neither command permanently changes the stored mode/sandbox selection.
 
+`/menu` and the default `/help` response present a Telegram-native control panel
+for common read-only and operator actions. Fixed panel buttons use short static
+callback payloads and route back into the same authorization, idleness, and
+owner checks as their slash-command equivalents.
+
 Interactive Telegram menus are used for settings that naturally require a
 choice: `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, and `/yolo`. The bot
 stores only a short-lived in-memory token in the callback payload instead of
