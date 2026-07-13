@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.10 — 2026-07-13
+
+- Make `/clear` respond immediately with a progress message, then edit that
+  message with the final cleanup result after Telegram deletion calls finish.
+
 ## 0.3.9 — 2026-07-13
 
 - Add `/clear` and a `🧹 정리` menu button to delete recently tracked Telegram

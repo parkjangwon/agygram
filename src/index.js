@@ -1244,6 +1244,7 @@ async function main() {
       await ctx.reply('작업 응답 전송 중에는 /clear 를 실행하지 않습니다. 완료 후 다시 시도하세요.');
       return;
     }
+    const progress = await ctx.reply('🧹 채팅창을 정리 중입니다...');
     const currentMessageId = ctx.message?.message_id ?? ctx.callbackQuery?.message?.message_id;
     const fallbackMessageIds =
       currentMessageId && ctx.chat.type === 'private'
@@ -1252,20 +1253,25 @@ async function main() {
             (_, index) => currentMessageId - index,
           )
         : currentMessageId ? [currentMessageId] : [];
+    const trackedMessages = state.get(key).telegramMessages
+      .filter((entry) => entry.messageId !== progress.message_id);
     const result = await deleteTrackedTelegramMessages({
       telegram: ctx.telegram,
       chatId: ctx.chat.id,
-      messages: state.get(key).telegramMessages,
+      messages: trackedMessages,
       extraMessageIds: fallbackMessageIds,
     });
     await state.update(key, (session) => ({ ...session, telegramMessages: [] }));
     const failed = result.failed > 0 ? `\n삭제하지 못한 메시지: ${result.failed}개` : '';
     const skipped = result.skipped > 0 ? `\n오래됐거나 추적 범위 밖인 메시지: ${result.skipped}개` : '';
-    await ctx.reply(
-      result.deleted > 0
+    const text = result.deleted > 0
         ? `최근 대화 메시지 ${result.deleted}개를 정리했습니다.${failed}${skipped}`
-        : `정리할 수 있는 최근 메시지를 찾지 못했습니다.${failed}${skipped}`,
-    );
+        : `정리할 수 있는 최근 메시지를 찾지 못했습니다.${failed}${skipped}`;
+    await ctx.telegram.callApi('editMessageText', {
+      chat_id: ctx.chat.id,
+      message_id: progress.message_id,
+      text,
+    }).catch(() => ctx.reply(text));
   };
   const sendLastResponse = async (ctx) => {
     const key = sessionKey(ctx);
