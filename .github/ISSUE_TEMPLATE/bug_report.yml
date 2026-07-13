@@ -1,0 +1,69 @@
+name: Bug report
+description: Report an agygram install, Telegram, auth, update, or runtime problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve agygram. Please redact bot tokens, OAuth codes, emails, private chat IDs, and workspace secrets before posting.
+  - type: input
+    id: agygram-version
+    attributes:
+      label: agygram version
+      description: Output of `/info`, `/doctor`, or `agygram --version`.
+      placeholder: "0.3.13"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: "v22.x or v24.x"
+    validations:
+      required: true
+  - type: input
+    id: agy-version
+    attributes:
+      label: agy version
+      placeholder: "agy 1.1.1"
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - Managed release installer
+        - Source checkout
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: Paste `/doctor` or `agygram doctor` output with secrets redacted.
+      render: text
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the command/button used, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redact secrets before attaching logs.
+      render: text

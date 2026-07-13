@@ -43,6 +43,7 @@ Success looks like this:
 
 - `/menu` shows a button panel.
 - `/info` shows the running agygram version.
+- `/doctor` shows green checks for agygram, Node.js, `agy`, workspace, Telegram, and auth.
 - `/auth` sends only the useful URL/code prompts, not the noisy Antigravity terminal UI.
 
 If you are handing this repo to another coding agent on a remote server, this prompt is usually enough:
@@ -57,9 +58,28 @@ then verify from Telegram that /menu opens and /auth starts headless OAuth.
 
 - Telegram-native control for `agy`: chat, plan/apply, a `/menu` button panel, button-based model/agent/skill/mode switching, uploads, jobs, retries, and result recovery.
 - Headless OAuth designed for remote Linux servers and other no-IDE environments.
+- Telegram `/doctor` for checking install, workspace, auth, and `agy` readiness without opening SSH.
 - Managed per-user service: launchd on macOS, systemd user service on Linux, Task Scheduler on Windows.
 - Verified release installer/updater and data-preserving uninstaller.
 - Conservative defaults: sandbox on, owner-only auth/update, allowlists, execution limits, storage limits.
+
+## Telegram-first UX
+
+agygram is intentionally button-first after installation:
+
+- `/start` opens an onboarding checklist.
+- `/menu` opens the main control panel.
+- `/doctor` checks whether the server is ready.
+- `/auth` walks through headless OAuth from Telegram.
+- `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, and `/yolo` use buttons where possible.
+- `/update` shows the current version, latest version, release notes, and an apply button.
+
+Screenshots/GIFs are welcome in `docs/media/`. Good captures for the README are:
+
+1. `/start` onboarding checklist
+2. `/menu` button panel
+3. `/auth` URL/code flow
+4. `/update` changelog + apply button
 
 ## Day-Two Commands
 
@@ -76,6 +96,8 @@ Rerun the same install command any time to update or repair the managed installa
 
 To uninstall while keeping your config, runtime data, workspace, and Antigravity credentials, use the matching uninstaller from [Install details](docs/MANAGED_INSTALL.md#uninstall).
 
+Want to inspect without installing a background service first? Download the installer as shown in [Install details](docs/MANAGED_INSTALL.md), run it with `--setup --no-service`, then use `agygram doctor`. Rerun the same installer without `--no-service` when you are ready to keep the bot running.
+
 ## Telegram Commands
 
 | Command | Purpose |
@@ -85,7 +107,7 @@ To uninstall while keeping your config, runtime data, workspace, and Antigravity
 | `/plan <request>` / `/apply [notes]` | Create a plan, then apply it in sandboxed code mode. |
 | `/new`, `/workspace`, `/project` | Start fresh or change project context. |
 | `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, `/yolo` | Open Telegram buttons to inspect or change execution settings. `/skills query` searches long skill lists. |
-| `/status`, `/jobs`, `/last`, `/retry` | Inspect or recover work. |
+| `/doctor`, `/status`, `/jobs`, `/last`, `/retry` | Inspect health, progress, and recover work. |
 | `/auth` / `/cancel` | Authenticate or cancel the current request. |
 | `/update` / `/update apply` | Check and apply an official immutable release. |
 | `/info`, `/clear`, `/reset`, `/help` | Inspect state, clean recent chat messages, reset session state, or show help. |

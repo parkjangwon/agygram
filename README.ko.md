@@ -43,6 +43,7 @@ Windows PowerShell:
 
 - `/menu`가 버튼 패널을 보여줍니다.
 - `/info`가 실행 중인 agygram 버전을 보여줍니다.
+- `/doctor`가 agygram, Node.js, `agy`, workspace, Telegram, auth 상태를 체크합니다.
 - `/auth`가 Antigravity 터미널 UI 잡음 없이 필요한 URL/코드 안내만 보여줍니다.
 
 원격 서버의 다른 코딩 에이전트에게 이 리포를 맡길 때는 보통 아래 프롬프트면 충분합니다.
@@ -57,9 +58,28 @@ then verify from Telegram that /menu opens and /auth starts headless OAuth.
 
 - Telegram-native `agy` 제어: 대화, plan/apply, `/menu` 버튼 패널, 버튼 기반 model/agent/skill/mode 전환, 업로드, 작업 기록, 재시도, 결과 복구
 - 원격 Linux 서버 같은 no-IDE 환경을 위한 headless OAuth
+- SSH를 열지 않고 설치, workspace, auth, `agy` 준비 상태를 확인하는 Telegram `/doctor`
 - 사용자 단위 native service: macOS launchd, Linux systemd user service, Windows Task Scheduler
 - 검증된 릴리즈 설치/업데이트와 data 보존 언인스톨
 - 보수적인 기본값: sandbox on, owner-only auth/update, allowlist, 실행/저장 한도
+
+## Telegram 우선 UX
+
+설치 후에는 최대한 버튼으로 조작하도록 설계했습니다.
+
+- `/start`는 온보딩 체크리스트를 보여줍니다.
+- `/menu`는 메인 조작 패널을 엽니다.
+- `/doctor`는 서버 준비 상태를 점검합니다.
+- `/auth`는 Telegram 안에서 headless OAuth를 안내합니다.
+- `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, `/yolo`는 가능한 한 버튼 UI를 사용합니다.
+- `/update`는 현재 버전, 최신 버전, 릴리즈 노트, 적용 버튼을 함께 보여줍니다.
+
+스크린샷/GIF는 `docs/media/`에 넣으면 좋습니다. README에 특히 잘 맞는 캡처는 다음입니다.
+
+1. `/start` 온보딩 체크리스트
+2. `/menu` 버튼 패널
+3. `/auth` URL/code 흐름
+4. `/update` changelog + 적용 버튼
 
 ## 운영 명령
 
@@ -76,6 +96,8 @@ agygram setup
 
 설정, 런타임 데이터, workspace, Antigravity 인증 정보는 보존하면서 제거하려면 [설치 상세](docs/MANAGED_INSTALL.md#uninstall)의 uninstaller를 사용하세요.
 
+백그라운드 서비스 설치 전에 먼저 살펴보고 싶다면 [설치 상세](docs/MANAGED_INSTALL.md)의 방식으로 installer를 받은 뒤 `--setup --no-service`로 실행하고 `agygram doctor`를 확인하세요. 상주 실행 준비가 되면 같은 installer를 `--no-service` 없이 다시 실행하면 됩니다.
+
 ## Telegram 명령어
 
 | 명령 | 용도 |
@@ -85,7 +107,7 @@ agygram setup
 | `/plan <요청>` / `/apply [추가 지시]` | 계획 생성 후 sandbox code 모드로 적용 |
 | `/new`, `/workspace`, `/project` | 새 대화 또는 프로젝트 문맥 전환 |
 | `/model`, `/agent`, `/skills`, `/mode`, `/sandbox`, `/yolo` | Telegram 버튼으로 실행 설정 조회/변경. `/skills 검색어`로 긴 skill 목록 검색 |
-| `/status`, `/jobs`, `/last`, `/retry` | 작업 상태 확인/복구 |
+| `/doctor`, `/status`, `/jobs`, `/last`, `/retry` | 상태 점검, 작업 상태 확인/복구 |
 | `/auth` / `/cancel` | 인증 또는 현재 요청 취소 |
 | `/update` / `/update apply` | 공식 immutable 릴리즈 확인/적용 |
 | `/info`, `/clear`, `/reset`, `/help` | 상태 확인, 최근 채팅 정리, 세션 초기화, 도움말 |

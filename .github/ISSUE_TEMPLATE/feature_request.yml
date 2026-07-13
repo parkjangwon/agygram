@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a Telegram UX, installer, auth, or agent-control improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to do with agygram?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Describe the Telegram command/button, installer behavior, or documentation change you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Telegram UI/UX
+        - Headless auth
+        - Installer/update/uninstall
+        - Cross-platform service
+        - Agent/model/skill control
+        - Documentation/onboarding
+        - Other
+    validations:
+      required: true

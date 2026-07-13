@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.13 — 2026-07-13
+
+- Add Telegram `/doctor` with install, Node.js, workspace, `agy`, auth, and
+  busy-state checks so operators can diagnose servers without SSH.
+- Replace `/start` with a Telegram onboarding checklist and next-action buttons.
+- Improve `/update` with release notes, release URL, and explicit apply/cancel
+  buttons.
+- Improve `/auth` and `/yolo` Telegram copy for clearer headless OAuth and
+  high-risk auto-approve expectations.
+- Add README onboarding sections for Telegram-first UX, safe no-service trials,
+  screenshot/GIF capture guidance, and GitHub issue templates.
+
 ## 0.3.12 — 2026-07-13
 
 - Improve first-run onboarding in the English and Korean READMEs with a

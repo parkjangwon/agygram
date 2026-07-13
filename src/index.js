@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { access, constants as fsConstants, mkdir } from 'node:fs/promises';
 import dotenv from 'dotenv';
 import { Telegraf } from 'telegraf';
 
@@ -114,7 +114,8 @@ const QUICK_HELP_TEXT = `agygram
 추천 흐름
 1. 처음이면 🔐 인증
 2. 🧠 모델 / 👤 에이전트 / 🧩 스킬 선택
-3. ⚙️ 모드 선택 후 메시지 전송
+3. 이상하면 🩺 점검
+4. ⚙️ 모드 선택 후 메시지 전송
 
 전체 명령어 텍스트가 필요하면 /help full`;
 
@@ -135,6 +136,7 @@ const HELP_TEXT = `agygram
 /workspace [경로] — 허용된 작업공간 조회 또는 전환
 /project [ID|clear] — 명시적 agy 프로젝트 지정
 /info — 현재 세션 상태
+/doctor — 설치·인증·작업공간 상태 점검
 /status — 현재 작업의 ID·단계·경과 시간
 /clear — 최근 봇/사용자 메시지를 가능한 범위에서 삭제
 /last — 마지막 agy 응답 다시 받기
@@ -664,7 +666,7 @@ async function main() {
   };
   const yoloChoices = (session) => [
     {
-      label: `${isYoloSession(session) ? '✓ ' : ''}YOLO 켜기 · 묻지 않고 실행`,
+      label: `${isYoloSession(session) ? '✓ ' : ''}YOLO 켜기 · 자동 승인`,
       action: 'yolo-on',
     },
     {
@@ -777,7 +779,7 @@ async function main() {
   const mainMenuRows = () => [
     [
       { label: '📊 상태', action: 'status' },
-      { label: 'ℹ️ 세션', action: 'info' },
+      { label: '🩺 점검', action: 'doctor' },
     ],
     [
       { label: '🧠 모델', action: 'model' },
@@ -797,7 +799,7 @@ async function main() {
     ],
     [
       { label: '🧹 정리', action: 'clear' },
-      { label: '🏠 메뉴 새로고침', action: 'menu' },
+      { label: 'ℹ️ 세션', action: 'info' },
     ],
     [
       { label: '🔐 인증', action: 'auth' },
@@ -817,6 +819,157 @@ async function main() {
   };
   const sendFullHelp = async (ctx) => {
     await replyLong(ctx, HELP_TEXT);
+  };
+  const checklistLine = (ok, text) => `${ok ? '✅' : '⬜'} ${text}`;
+  const formatReleaseNotes = (result) => {
+    const source = String(result.body || '').replace(/\r/g, '').trim();
+    if (!source) return '릴리즈 노트가 비어 있습니다.';
+    const lines = source
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !/^#+\s*/u.test(line))
+      .slice(0, 8);
+    const text = lines.join('\n');
+    return text.length > 900 ? `${text.slice(0, 897)}...` : text;
+  };
+  const formatUpdatePanel = (result) => {
+    if (result.version === result.current) {
+      return [
+        `✅ 최신 버전입니다. v${result.current}`,
+        result.url ? `릴리즈: ${result.url}` : null,
+      ].filter(Boolean).join('\n');
+    }
+    return [
+      `⬆️ 업데이트 가능: v${result.current} → v${result.version}`,
+      '',
+      '변경점',
+      formatReleaseNotes(result),
+      '',
+      result.url ? `릴리즈: ${result.url}` : null,
+    ].filter((line) => line != null).join('\n');
+  };
+  const sendOnboardingPanel = async (ctx, {
+    agyVersion,
+    catalogStatus,
+    authStatus,
+    workspace,
+    edit = false,
+    prefix = '',
+  } = {}) => {
+    const session = state.get(sessionKey(ctx));
+    const authOk = Boolean(authStatus?.authenticated);
+    const catalogOk = Boolean(catalogStatus?.available);
+    const workspaceOk = Boolean(workspace);
+    const text = [
+      prefix || 'agygram에 오신 것을 환영합니다.',
+      '',
+      '처음 쓰는 순서',
+      checklistLine(authOk, '인증 완료'),
+      checklistLine(catalogOk, 'agy 모델/에이전트 조회 가능'),
+      checklistLine(workspaceOk, `작업공간 준비${workspace ? `: ${workspace}` : ''}`),
+      checklistLine(Boolean(session.model || session.agent || session.skill), '선택 설정 적용'),
+      '',
+      agyVersion ? `agy: ${agyVersion}` : 'agy: 확인 필요',
+      authOk
+        ? '이제 일반 메시지를 보내면 agy가 처리합니다.'
+        : '먼저 🔐 인증을 누르고 authorization code를 이 채팅에 붙여넣으세요.',
+    ].join('\n');
+    await sendPanel(
+      ctx,
+      text,
+      [
+        [
+          { label: authOk ? '🔐 인증 다시 확인' : '🔐 인증하기', action: 'auth' },
+          { label: '🩺 점검', action: 'doctor' },
+        ],
+        [
+          { label: '🧠 모델', action: 'model' },
+          { label: '🧩 스킬', action: 'skills' },
+        ],
+        [
+          { label: '⚙️ 모드', action: 'mode' },
+          { label: '💬 시작하기', action: 'close' },
+        ],
+      ],
+      { edit },
+    );
+  };
+  const sendDoctorPanel = async (ctx, { edit = false } = {}) => {
+    const key = sessionKey(ctx);
+    const stopTyping = startTyping(ctx);
+    const checks = [];
+    const add = (ok, label, detail = '') => {
+      checks.push(`${ok ? '✅' : '⚠️'} ${label}${detail ? `: ${detail}` : ''}`);
+    };
+    const render = () => sendPanel(
+      ctx,
+      ['🩺 agygram doctor', '', ...checks].join('\n'),
+      [
+        [
+          { label: '🔐 인증', action: 'auth' },
+          { label: '⬆️ 업데이트', action: 'update' },
+        ],
+        [
+          { label: 'ℹ️ 세션', action: 'info' },
+          { label: '🏠 메뉴', action: 'menu' },
+        ],
+      ],
+      { edit },
+    );
+    const collect = async (signal = undefined) => {
+      const session = state.get(key);
+      const busy = tasks.isActive(key) || auth.hasAnyActive();
+      add(true, 'agygram', `v${AGYGRAM_VERSION}`);
+      add([22, 24].includes(Number(process.versions.node.split('.')[0])), 'Node.js', process.version);
+      add(!tasks.isActive(key), '현재 채팅 작업', tasks.isActive(key) ? '진행 중' : 'idle');
+      add(!auth.hasAnyActive(), '인증 작업', auth.hasAnyActive() ? '진행 중' : 'idle');
+      add(config.allowedChatIds.has(String(ctx.chat.id)), 'Telegram 허용 채팅', String(ctx.chat.id));
+      let cwd = null;
+      try {
+        cwd = await workspaceFor(session);
+        await access(cwd, fsConstants.R_OK | fsConstants.W_OK);
+        add(true, '작업공간', cwd);
+      } catch (error) {
+        add(false, '작업공간', error.message);
+      }
+      if (!cwd) return;
+      if (busy) {
+        add(false, 'agy 세부 점검', '작업/인증 중이라 무거운 probe는 건너뜀');
+        return;
+      }
+      try {
+        const version = await agy.version({ cwd, signal });
+        add(true, 'agy 실행 파일', version);
+      } catch (error) {
+        add(false, 'agy 실행 파일', formatError(error));
+      }
+      try {
+        const catalog = await agy.catalogStatus({ cwd, signal });
+        add(catalog.available, '모델 조회', catalog.available
+          ? `모델 ${catalog.models.length}개`
+          : catalog.detail || catalog.reason || '확인 실패');
+      } catch (error) {
+        add(false, '모델 조회', error.message);
+      }
+      try {
+        const authStatus = await agy.authenticationStatus({ cwd, signal });
+        add(authStatus.authenticated, 'agy 인증', authStatus.authenticated ? '완료' : '/auth 필요');
+      } catch (error) {
+        add(false, 'agy 인증', formatError(error));
+      }
+    };
+    try {
+      if (tasks.isActive(key) || auth.hasAnyActive()) {
+        await collect();
+      } else {
+        await runAdmittedTask(ctx, 'probe:doctor', collect);
+      }
+      await render();
+    } catch (error) {
+      await replyLong(ctx, `doctor 실행에 실패했습니다.\n\n${formatError(error)}`);
+    } finally {
+      stopTyping();
+    }
   };
   const rememberTelegramMessages = (key, entries) => {
     if (!entries.length) return;
@@ -1051,7 +1204,7 @@ async function main() {
         current: yoloStatus(session),
         choices: yoloChoices(session),
         hint:
-          '켜면 다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다.',
+          '고위험 모드입니다. 켜면 다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다. 개인 서버, 좁은 workspace, git으로 저장된 프로젝트에서만 권장합니다.',
         edit,
       });
     });
@@ -1088,37 +1241,53 @@ async function main() {
     try {
       const result = apply ? await applySourceUpdate(process.cwd()) : await checkSourceUpdate(process.cwd());
       if (!apply) {
-        if (result.version === result.current) {
-          await sendPanel(ctx, `최신 버전입니다. v${result.current}`, [[{ label: '🏠 메뉴', action: 'menu' }]]);
-          return;
-        }
         await sendPanel(
           ctx,
-          `업데이트 가능: v${result.current} → v${result.version}`,
-          [
-            [
-              { label: `⬆️ v${result.version} 설치`, action: 'update_apply' },
-              { label: '나중에', action: 'menu' },
-            ],
-          ],
+          formatUpdatePanel(result),
+          result.version === result.current
+            ? [[{ label: '🏠 메뉴', action: 'menu' }]]
+            : [
+                [
+                  { label: `⬆️ v${result.version} 설치`, action: 'update_apply' },
+                  { label: '취소', action: 'close' },
+                ],
+                [{ label: '🏠 메뉴', action: 'menu' }],
+              ],
         );
         return;
       }
       if (!result.changed) {
-        await ctx.reply(`이미 최신 버전입니다. v${result.current}`);
+        await sendPanel(ctx, `✅ 이미 최신 버전입니다. v${result.current}`, [[{ label: '🏠 메뉴', action: 'menu' }]]);
         return;
       }
       if (result.managed) {
         const detail = result.scheduled?.unit
           ? ` (${result.scheduled.unit})`
           : '';
-        await ctx.reply(`v${result.version} managed 업데이트를 예약했습니다${detail}. 설치가 완료되면 서비스가 새 릴리즈로 재시작됩니다.`);
+        await sendPanel(
+          ctx,
+          `✅ v${result.version} managed 업데이트를 예약했습니다${detail}.\n\n설치가 완료되면 서비스가 새 릴리즈로 재시작됩니다. 잠시 뒤 /info 또는 /doctor로 확인하세요.`,
+          [[{ label: '🩺 점검', action: 'doctor' }], [{ label: '🏠 메뉴', action: 'menu' }]],
+        );
         return;
       }
-      await ctx.reply(`v${result.version}을 검증·설치했습니다. 서비스를 재시작합니다.`);
+      await sendPanel(
+        ctx,
+        `✅ v${result.version}을 검증·설치했습니다.\n\n서비스를 재시작합니다. 잠시 뒤 /info 또는 /doctor로 확인하세요.`,
+        [[{ label: '🩺 점검', action: 'doctor' }]],
+      );
       if (result.restart !== false) setTimeout(() => process.exit(75), 300).unref?.();
     } catch (error) {
-      await ctx.reply(`업데이트하지 않았습니다: ${error.message}`);
+      await sendPanel(
+        ctx,
+        `업데이트하지 않았습니다.\n\n${error.message}`,
+        [
+          [
+            { label: '🩺 점검', action: 'doctor' },
+            { label: '🏠 메뉴', action: 'menu' },
+          ],
+        ],
+      );
     }
   };
   const startAuthFlow = async (ctx) => {
@@ -1206,11 +1375,21 @@ async function main() {
       return;
     }
     try {
-        await replyLong(
-          ctx,
-        '🔐 agy 인증 확인을 시작했어요.\n\n' +
-          '로그인이 필요하면 Google 인증 링크를 보내드릴게요. 링크에서 받은 authorization code는 이 채팅에 그대로 붙여넣으면 됩니다.\n\n' +
-          '이미 로그인되어 있으면 바로 완료 메시지가 나옵니다. 취소: /cancel',
+      await sendPanel(
+        ctx,
+        '🔐 agy headless OAuth를 시작했습니다.\n\n' +
+          '진행 순서\n' +
+          '1. 잠시 후 Google 인증 URL이 오면 브라우저에서 엽니다.\n' +
+          '2. 로그인 후 표시되는 authorization code를 복사합니다.\n' +
+          '3. 이 Telegram 채팅에 그대로 붙여넣습니다.\n' +
+          '4. agygram이 실제 headless 요청으로 인증을 검증합니다.\n\n' +
+          '이미 로그인되어 있으면 바로 완료 메시지가 나옵니다.',
+        [
+          [
+            { label: '⛔ 인증 취소', action: 'cancel' },
+            { label: '🩺 점검', action: 'doctor' },
+          ],
+        ],
         );
     } catch (error) {
       console.error('Auth start notification failed', { name: error.name, code: error.code });
@@ -1685,7 +1864,7 @@ async function main() {
   });
 
   const staleNoticeChats = new Set();
-  const staleSafeCommands = new Set(['help', 'info', 'menu', 'status', 'clear']);
+  const staleSafeCommands = new Set(['help', 'info', 'menu', 'status', 'clear', 'doctor']);
   bot.use(async (ctx, next) => {
     const { stale, ageSeconds } = classifyUpdateAge(ctx, config.maxUpdateAgeSeconds, {
       safeCommands: staleSafeCommands,
@@ -1719,13 +1898,18 @@ async function main() {
         const cwd = await workspaceFor(session);
         const version = await agy.version({ cwd, signal });
         const catalogStatus = await agy.catalogStatus({ cwd, signal });
-        const readinessLine = catalogStatus.available
-          ? `모델 ${catalogStatus.models.length}개 조회됨`
-          : '모델 조회 실패';
-        await sendMainMenu(ctx, {
-          prefix:
-          `agygram이 준비되었습니다.\nagy ${version} · ${readinessLine}\n` +
-            `인증은 실제 요청 시 확인되며, 필요하면 🔐 인증을 누르세요.\n작업공간: ${cwd}`,
+        let authStatus = null;
+        try {
+          authStatus = await agy.authenticationStatus({ cwd, signal });
+        } catch {
+          authStatus = { authenticated: false };
+        }
+        await sendOnboardingPanel(ctx, {
+          agyVersion: version,
+          catalogStatus,
+          authStatus,
+          workspace: cwd,
+          prefix: 'agygram이 준비되었습니다.',
         });
       });
     } catch (error) {
@@ -1769,6 +1953,9 @@ async function main() {
         return;
       case 'status':
         await sendStatusPanel(ctx, { edit: true });
+        return;
+      case 'doctor':
+        await sendDoctorPanel(ctx, { edit: true });
         return;
       case 'model':
         await openModelMenu(ctx, { edit: true });
@@ -1854,7 +2041,10 @@ async function main() {
           return;
         }
         await acknowledgeChoice(ctx, 'YOLO mode를 켰습니다.');
-        await finishChoiceMessage(ctx, 'YOLO mode: 켜짐\naccept-edits + unsandboxed + --dangerously-skip-permissions');
+        await finishChoiceMessage(
+          ctx,
+          '⚡ YOLO mode: 켜짐\n\n다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다.\n개인 서버, 좁은 workspace, git 상태가 깨끗한 프로젝트에서만 사용하세요.',
+        );
         interactiveMenus.delete(menu.token);
         return;
       }
@@ -1934,6 +2124,10 @@ async function main() {
 
   bot.command('status', async (ctx) => {
     await sendStatusPanel(ctx);
+  });
+
+  bot.command('doctor', async (ctx) => {
+    await sendDoctorPanel(ctx);
   });
 
   bot.command('last', async (ctx) => {
@@ -2163,7 +2357,9 @@ async function main() {
           await ctx.reply(policyError);
           return;
         }
-        await ctx.reply('YOLO mode: 켜짐\naccept-edits + unsandboxed + --dangerously-skip-permissions');
+        await ctx.reply(
+          '⚡ YOLO mode: 켜짐\n\n다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다.\n개인 서버, 좁은 workspace, git 상태가 깨끗한 프로젝트에서만 사용하세요.',
+        );
         return;
       }
       if (!aliases[requested]) {
@@ -2187,7 +2383,7 @@ async function main() {
           current: yoloStatus(session),
           choices: yoloChoices(session),
           hint:
-            '켜면 다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다.',
+            '고위험 모드입니다. 켜면 다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다. 개인 서버, 좁은 workspace, git으로 저장된 프로젝트에서만 권장합니다.',
         });
         return;
       }
@@ -2197,7 +2393,9 @@ async function main() {
           await ctx.reply(policyError);
           return;
         }
-        await ctx.reply('YOLO mode: 켜짐\naccept-edits + unsandboxed + --dangerously-skip-permissions');
+        await ctx.reply(
+          '⚡ YOLO mode: 켜짐\n\n다음 일반 요청부터 accept-edits + unsandboxed + --dangerously-skip-permissions로 실행합니다.\n개인 서버, 좁은 workspace, git 상태가 깨끗한 프로젝트에서만 사용하세요.',
+        );
         return;
       }
       if (['off', 'false', '0', 'disable', 'disabled'].includes(requested)) {

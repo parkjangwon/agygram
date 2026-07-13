@@ -15,6 +15,7 @@ export const BOT_COMMANDS = Object.freeze([
   { command: 'workspace', description: '작업공간 조회 또는 전환' },
   { command: 'project', description: 'agy 프로젝트 지정' },
   { command: 'info', description: '현재 세션 상태' },
+  { command: 'doctor', description: '설치·인증 상태 점검' },
   { command: 'status', description: '현재 작업 단계와 경과 시간' },
   { command: 'clear', description: '최근 채팅 메시지 정리' },
   { command: 'last', description: '마지막 agy 응답 다시 받기' },

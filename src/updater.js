@@ -148,7 +148,14 @@ async function latestRelease() {
     if (!release?.immutable || release.draft || release.prerelease || !/^v\d+\.\d+\.\d+$/.test(release.tag_name || '')) {
       throw new Error('Latest GitHub release is not an immutable stable release');
     }
-    return { version: release.tag_name.slice(1), tag: release.tag_name, target: release.target_commitish };
+    return {
+      version: release.tag_name.slice(1),
+      tag: release.tag_name,
+      target: release.target_commitish,
+      name: release.name || release.tag_name,
+      url: release.html_url || `https://github.com/${REPOSITORY}/releases/tag/${release.tag_name}`,
+      body: typeof release.body === 'string' ? release.body : '',
+    };
   } finally { clearTimeout(timer); }
 }
 
