@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.11 — 2026-07-13
+
+- Make `/clear` sweep a much wider private-chat message range so older
+  pre-tracking bot messages are more likely to be removed.
+- Make `/clear` result text explain Telegram deletion limits instead of
+  surfacing noisy failed-candidate counts.
+
 ## 0.3.10 — 2026-07-13
 
 - Make `/clear` respond immediately with a progress message, then edit that

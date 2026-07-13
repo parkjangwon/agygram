@@ -139,9 +139,9 @@ The state file contains prompts/responses only when needed for transcript fallba
 For Telegram chat cleanup, each session keeps a small rolling list of recent
 Telegram message IDs. `/clear` uses this list to delete recently tracked bot and
 user messages when the Telegram Bot API permits it, then clears the list. In
-private chats only, it also attempts a bounded recent message-ID sweep from the
-current command/callback message so deployments upgraded from older versions can
-clean pre-tracking clutter without needing stored IDs. This is UI cleanup only:
+private chats only, it also attempts a wider bounded recent message-ID sweep
+from the current command/callback message so deployments upgraded from older
+versions can clean pre-tracking clutter without needing stored IDs. This is UI cleanup only:
 it does not change the native agy conversation, transcript fallback, uploads,
 jobs, or authentication state. Telegram may reject deletion for old messages or
 messages outside the bot's permissions.

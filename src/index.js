@@ -148,7 +148,7 @@ const HELP_TEXT = `agygram
 
 문서나 사진을 보내면 안전한 업로드 디렉터리에 저장한 뒤 agy가 읽도록 전달합니다.`;
 
-const PRIVATE_CLEAR_SWEEP_LIMIT = 80;
+const PRIVATE_CLEAR_SWEEP_LIMIT = 5_000;
 
 function formatError(error) {
   if (error instanceof BusyError) {
@@ -1262,11 +1262,15 @@ async function main() {
       extraMessageIds: fallbackMessageIds,
     });
     await state.update(key, (session) => ({ ...session, telegramMessages: [] }));
-    const failed = result.failed > 0 ? `\n삭제하지 못한 메시지: ${result.failed}개` : '';
-    const skipped = result.skipped > 0 ? `\n오래됐거나 추적 범위 밖인 메시지: ${result.skipped}개` : '';
+    const scan = ctx.chat.type === 'private' && fallbackMessageIds.length > 0
+      ? `\n스캔 범위: 최근 ${fallbackMessageIds.length}개 후보`
+      : '';
+    const limited = result.failed > 0 || result.skipped > 0
+      ? '\n남은 메시지는 Telegram 삭제 제한, 이미 삭제된 메시지, 또는 권한 제한 때문일 수 있습니다.'
+      : '';
     const text = result.deleted > 0
-        ? `최근 대화 메시지 ${result.deleted}개를 정리했습니다.${failed}${skipped}`
-        : `정리할 수 있는 최근 메시지를 찾지 못했습니다.${failed}${skipped}`;
+        ? `최근 대화 메시지 ${result.deleted}개를 정리했습니다.${scan}${limited}`
+        : `정리할 수 있는 최근 메시지를 찾지 못했습니다.${scan}${limited}`;
     await ctx.telegram.callApi('editMessageText', {
       chat_id: ctx.chat.id,
       message_id: progress.message_id,

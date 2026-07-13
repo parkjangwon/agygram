@@ -65,7 +65,7 @@ Rerun the same install command any time to update or repair the managed installa
 
 Documents and photos are stored in an isolated upload directory for the single request that uses them.
 
-`/clear` deletes recently tracked bot/user messages when Telegram permits it. In private chats it also sweeps a small recent message-ID window so clutter created before message tracking was enabled can usually be cleaned once. It is a chat cleanup tool; it does not reset agy conversation state. Use `/reset` only when you want to clear the current session, uploads, and local conversation context.
+`/clear` deletes recently tracked bot/user messages when Telegram permits it. In private chats it also sweeps a bounded recent message-ID range so clutter created before message tracking was enabled can usually be cleaned once. It is a chat cleanup tool; it does not reset agy conversation state. Use `/reset` only when you want to clear the current session, uploads, and local conversation context.
 
 ## Important Notes
 
