@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { normalizeTrackedTelegramMessages } from './telegram-cleanup.js';
+
 const SCHEMA_VERSION = 2;
 
 const EXECUTION_FIELDS = [
@@ -109,6 +111,7 @@ function normalizeSession(value, defaults) {
         : defaults.workspaceDir,
     newProject: typeof source.newProject === 'boolean' ? source.newProject : true,
     history: normalizeHistory(source.history),
+    telegramMessages: normalizeTrackedTelegramMessages(source.telegramMessages),
     lastRun: normalizeLastRun(source.lastRun),
     executionGeneration: isUuid(source.executionGeneration)
       ? source.executionGeneration
@@ -150,6 +153,7 @@ export class StateStore {
       workspaceDir: null,
       newProject: true,
       history: [],
+      telegramMessages: [],
       lastRun: null,
       executionGeneration: null,
       revision: 0,

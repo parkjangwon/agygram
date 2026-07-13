@@ -53,6 +53,11 @@ import {
   parseActionCallback,
   parseChoiceCallback,
 } from './interactive-ui.js';
+import {
+  deleteTrackedTelegramMessages,
+  extractTelegramMessageIds,
+  normalizeTrackedTelegramMessages,
+} from './telegram-cleanup.js';
 import { buildPromptWithSkill, filterSkills, listAgySkills } from './skills.js';
 import {
   commandArgument,
@@ -131,6 +136,7 @@ const HELP_TEXT = `agygram
 /project [ID|clear] — 명시적 agy 프로젝트 지정
 /info — 현재 세션 상태
 /status — 현재 작업의 ID·단계·경과 시간
+/clear — 최근 봇/사용자 메시지를 가능한 범위에서 삭제
 /last — 마지막 agy 응답 다시 받기
 /jobs — 최근 내구 작업 기록
 /retry <작업ID> — 실패·취소·중단된 작업 재시도
@@ -141,6 +147,8 @@ const HELP_TEXT = `agygram
 /help — 이 도움말
 
 문서나 사진을 보내면 안전한 업로드 디렉터리에 저장한 뒤 agy가 읽도록 전달합니다.`;
+
+const PRIVATE_CLEAR_SWEEP_LIMIT = 80;
 
 function formatError(error) {
   if (error instanceof BusyError) {
@@ -788,6 +796,10 @@ async function main() {
       { label: '📜 작업 기록', action: 'jobs' },
     ],
     [
+      { label: '🧹 정리', action: 'clear' },
+      { label: '🏠 메뉴 새로고침', action: 'menu' },
+    ],
+    [
       { label: '🔐 인증', action: 'auth' },
       { label: '⬆️ 업데이트', action: 'update' },
     ],
@@ -805,6 +817,48 @@ async function main() {
   };
   const sendFullHelp = async (ctx) => {
     await replyLong(ctx, HELP_TEXT);
+  };
+  const rememberTelegramMessages = (key, entries) => {
+    if (!entries.length) return;
+    detach(
+      state.update(key, (session) => ({
+        ...session,
+        telegramMessages: normalizeTrackedTelegramMessages(session.telegramMessages, entries),
+      })),
+      'telegram-message-tracking',
+      backgroundActivities,
+    );
+  };
+  const rememberTelegramResult = (ctx, result, direction = 'out') => {
+    const ids = extractTelegramMessageIds(result);
+    if (ids.length === 0) return;
+    const at = new Date().toISOString();
+    rememberTelegramMessages(
+      sessionKey(ctx),
+      ids.map((messageId) => ({ messageId, direction, at })),
+    );
+  };
+  const installTelegramMessageTracking = (ctx) => {
+    ctx.state ??= {};
+    ctx.state.agygramRecordTelegramResult = (result, direction = 'out') => {
+      rememberTelegramResult(ctx, result, direction);
+    };
+    if (ctx.message?.message_id) {
+      rememberTelegramMessages(sessionKey(ctx), [{
+        messageId: ctx.message.message_id,
+        direction: 'in',
+        at: new Date((ctx.message.date || Math.floor(Date.now() / 1_000)) * 1_000).toISOString(),
+      }]);
+    }
+    for (const method of ['reply', 'replyWithDocument']) {
+      if (typeof ctx[method] !== 'function') continue;
+      const original = ctx[method].bind(ctx);
+      ctx[method] = async (...args) => {
+        const result = await original(...args);
+        rememberTelegramResult(ctx, result, 'out');
+        return result;
+      };
+    }
   };
   const sendSessionInfo = async (ctx, { edit = false } = {}) => {
     const key = sessionKey(ctx);
@@ -1078,6 +1132,10 @@ async function main() {
     }
     const chatId = sessionKey(ctx);
     const threadOptions = messageThreadOptions(ctx);
+    const trackedDeliveryOptions = (signal) => ({
+      signal,
+      onSent: (result) => rememberTelegramResult(ctx, result, 'out'),
+    });
     if (tasks.hasAnyActive() || auth.hasAnyActive()) {
       await jobs.markUpdateSeen(ctx.update?.update_id, { decision: 'rejected' });
       await ctx.reply('다른 작업이 진행 중입니다. 완료를 기다리거나 해당 채팅에서 /cancel 을 사용하세요.');
@@ -1113,7 +1171,7 @@ async function main() {
       auth.start(chatId, {
         cwd,
         onOutput: (output, { signal }) =>
-          sendLong(bot.telegram, ctx.chat.id, output, threadOptions, undefined, { signal }),
+          sendLong(bot.telegram, ctx.chat.id, output, threadOptions, undefined, trackedDeliveryOptions(signal)),
         onExit: async ({ exitCode, cancelled, timedOut, error, deliverySignal }) => {
           try {
             if (cancelled || timedOut) {
@@ -1123,7 +1181,7 @@ async function main() {
                 timedOut ? '인증 세션 시간이 만료되었습니다.' : '인증을 취소했습니다.',
                 threadOptions,
                 undefined,
-                { signal: deliverySignal },
+                trackedDeliveryOptions(deliverySignal),
               );
               return;
             }
@@ -1135,7 +1193,7 @@ async function main() {
                 : `인증 프로세스가 종료되었습니다(exit ${exitCode}). 인증을 확인하지 못했습니다.`,
               threadOptions,
               undefined,
-              { signal: deliverySignal },
+              trackedDeliveryOptions(deliverySignal),
             );
           } finally {
             authOwners.delete(chatId);
@@ -1174,6 +1232,39 @@ async function main() {
       authCancelled || admissionCancelled || taskCancelled
         ? '중단 신호를 보냈습니다.'
         : '진행 중인 작업이 없습니다.',
+    );
+  };
+  const clearChatWindow = async (ctx) => {
+    const key = sessionKey(ctx);
+    if (auth.hasAnyActive()) {
+      await ctx.reply('인증 중에는 /clear 를 실행하지 않습니다. 인증을 끝내거나 /cancel 후 다시 시도하세요.');
+      return;
+    }
+    if (tasks.isActive(key)) {
+      await ctx.reply('작업 응답 전송 중에는 /clear 를 실행하지 않습니다. 완료 후 다시 시도하세요.');
+      return;
+    }
+    const currentMessageId = ctx.message?.message_id ?? ctx.callbackQuery?.message?.message_id;
+    const fallbackMessageIds =
+      currentMessageId && ctx.chat.type === 'private'
+        ? Array.from(
+            { length: Math.min(PRIVATE_CLEAR_SWEEP_LIMIT, currentMessageId) },
+            (_, index) => currentMessageId - index,
+          )
+        : currentMessageId ? [currentMessageId] : [];
+    const result = await deleteTrackedTelegramMessages({
+      telegram: ctx.telegram,
+      chatId: ctx.chat.id,
+      messages: state.get(key).telegramMessages,
+      extraMessageIds: fallbackMessageIds,
+    });
+    await state.update(key, (session) => ({ ...session, telegramMessages: [] }));
+    const failed = result.failed > 0 ? `\n삭제하지 못한 메시지: ${result.failed}개` : '';
+    const skipped = result.skipped > 0 ? `\n오래됐거나 추적 범위 밖인 메시지: ${result.skipped}개` : '';
+    await ctx.reply(
+      result.deleted > 0
+        ? `최근 대화 메시지 ${result.deleted}개를 정리했습니다.${failed}${skipped}`
+        : `정리할 수 있는 최근 메시지를 찾지 못했습니다.${failed}${skipped}`,
     );
   };
   const sendLastResponse = async (ctx) => {
@@ -1569,6 +1660,11 @@ async function main() {
     return next();
   });
 
+  bot.use(async (ctx, next) => {
+    installTelegramMessageTracking(ctx);
+    return next();
+  });
+
   // Exact rejected-ID intervals contain only updates whose handlers already
   // made a durable fail-closed decision. Suppress their Telegram redelivery
   // before any command, OAuth-input, file, or prompt handler can reinterpret it.
@@ -1579,7 +1675,7 @@ async function main() {
   });
 
   const staleNoticeChats = new Set();
-  const staleSafeCommands = new Set(['help', 'info', 'menu', 'status']);
+  const staleSafeCommands = new Set(['help', 'info', 'menu', 'status', 'clear']);
   bot.use(async (ctx, next) => {
     const { stale, ageSeconds } = classifyUpdateAge(ctx, config.maxUpdateAgeSeconds, {
       safeCommands: staleSafeCommands,
@@ -1631,6 +1727,10 @@ async function main() {
 
   bot.command('menu', (ctx) => sendMainMenu(ctx));
 
+  bot.command('clear', async (ctx) => {
+    await clearChatWindow(ctx);
+  });
+
   bot.command('help', async (ctx) => {
     if (normalizeChoice(commandArgument(ctx)) === 'full') {
       await sendFullHelp(ctx);
@@ -1680,6 +1780,9 @@ async function main() {
         return;
       case 'jobs':
         await sendJobsPanel(ctx, { edit: true });
+        return;
+      case 'clear':
+        await clearChatWindow(ctx);
         return;
       case 'last':
         await sendLastResponse(ctx);

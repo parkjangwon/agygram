@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.9 — 2026-07-13
+
+- Add `/clear` and a `🧹 정리` menu button to delete recently tracked Telegram
+  chat messages without resetting agy session state.
+
 ## 0.3.8 — 2026-07-13
 
 - Add a Telegram `닫기` button to action panels such as `/menu`, `/help`,

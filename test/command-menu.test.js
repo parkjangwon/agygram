@@ -8,7 +8,7 @@ test('command menu includes only the current bot commands', () => {
     BOT_COMMANDS.map(({ command }) => command),
     [
       'start', 'menu', 'plan', 'apply', 'new', 'model', 'agent', 'skills', 'mode', 'sandbox', 'yolo',
-      'workspace', 'project', 'info', 'status', 'last', 'jobs', 'retry', 'auth',
+      'workspace', 'project', 'info', 'status', 'clear', 'last', 'jobs', 'retry', 'auth',
       'update', 'cancel', 'reset', 'help',
     ],
   );

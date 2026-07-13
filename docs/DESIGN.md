@@ -99,6 +99,9 @@ top-level session map are migrated atomically at startup:
       "workspaceDir": "/absolute/workspace",
       "newProject": false,
       "history": [],
+      "telegramMessages": [
+        { "messageId": 1234, "direction": "out", "at": "..." }
+      ],
       "executionGeneration": "session-lifetime-uuid",
       "revision": 4,
       "lastRun": {
@@ -132,6 +135,16 @@ even when its numeric revision starts at zero again.
 The original top-level `{ chatId: session }` shape is migrated. Unsupported future schema versions fail instead of being silently discarded. Mutations are serialized in process, written to a private temporary file, and renamed before the in-memory value is committed. Malformed JSON is moved aside with a timestamp and replaced with empty state.
 
 The state file contains prompts/responses only when needed for transcript fallback or last-result recovery. It never intentionally stores the bot token, OAuth input, or Antigravity token.
+
+For Telegram chat cleanup, each session keeps a small rolling list of recent
+Telegram message IDs. `/clear` uses this list to delete recently tracked bot and
+user messages when the Telegram Bot API permits it, then clears the list. In
+private chats only, it also attempts a bounded recent message-ID sweep from the
+current command/callback message so deployments upgraded from older versions can
+clean pre-tracking clutter without needing stored IDs. This is UI cleanup only:
+it does not change the native agy conversation, transcript fallback, uploads,
+jobs, or authentication state. Telegram may reject deletion for old messages or
+messages outside the bot's permissions.
 
 ## Native conversation continuity and fallback
 

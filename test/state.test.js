@@ -191,6 +191,13 @@ test('StateStore execution context is stable for touches and bookkeeping but cha
     assert.equal(bookkeeping.executionGeneration, created.executionGeneration);
     assert.equal(bookkeeping.revision, completedRun.revision);
 
+    const telegramBookkeeping = await store.update('1', (session) => ({
+      ...session,
+      telegramMessages: [{ messageId: 123, direction: 'out', at: new Date().toISOString() }],
+    }));
+    assert.equal(telegramBookkeeping.executionGeneration, created.executionGeneration);
+    assert.equal(telegramBookkeeping.revision, completedRun.revision);
+
     const changed = await store.update('1', (session) => ({ ...session, mode: 'plan' }));
     assert.equal(changed.executionGeneration, created.executionGeneration);
     assert.equal(changed.revision, completedRun.revision + 1);

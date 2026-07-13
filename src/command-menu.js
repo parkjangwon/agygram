@@ -16,6 +16,7 @@ export const BOT_COMMANDS = Object.freeze([
   { command: 'project', description: 'agy 프로젝트 지정' },
   { command: 'info', description: '현재 세션 상태' },
   { command: 'status', description: '현재 작업 단계와 경과 시간' },
+  { command: 'clear', description: '최근 채팅 메시지 정리' },
   { command: 'last', description: '마지막 agy 응답 다시 받기' },
   { command: 'jobs', description: '최근 내구 작업 기록' },
   { command: 'retry', description: '실패·취소·중단 작업 재시도' },

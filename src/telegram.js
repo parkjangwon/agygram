@@ -498,6 +498,7 @@ async function deliverParts({ transport, parts, deliver, deliveryOptions }) {
       });
       retries += report.retries;
       duplicateRisk ||= report.duplicateRisk;
+      await deliveryOptions?.onSent?.(report.value, { index, total: parts.length, transport });
     } catch (error) {
       // retryTelegramCall only leaves cancellation/shutdown errors unwrapped.
       // Preserve that authoritative reason so callers do not start a fresh
@@ -597,6 +598,13 @@ function callTelegramApi(telegram, method, payload, signal, fallback) {
   return fallback();
 }
 
+function recordContextTelegramResult(ctx, result) {
+  if (typeof ctx?.state?.agygramRecordTelegramResult === 'function') {
+    ctx.state.agygramRecordTelegramResult(result, 'out');
+  }
+  return result;
+}
+
 export async function replyLong(ctx, text, extra = undefined, deliveryOptions = undefined) {
   const chunks = splitTelegramText(text);
   return deliverParts({
@@ -611,7 +619,7 @@ export async function replyLong(ctx, text, extra = undefined, deliveryOptions = 
         { ...(options || {}), text: chunk },
         signal,
         () => ctx.reply(chunk, options),
-      );
+      ).then((result) => recordContextTelegramResult(ctx, result));
     },
   });
 }
@@ -668,7 +676,7 @@ export async function sendAgyResponse(
         { document, ...extra },
         signal,
         () => ctx.replyWithDocument(document, extra),
-      );
+      ).then((result) => recordContextTelegramResult(ctx, result));
     },
   });
 }
@@ -720,7 +728,7 @@ export async function sendAgyResponseFile(ctx, filePath, deliveryOptions = undef
         const document = { source: stream, filename: 'agy-response.txt' };
         const extra = { caption: '응답이 길어 텍스트 파일로 보냅니다.' };
         try {
-          return await waitForAbortable(
+          const result = await waitForAbortable(
             callContextApi(
               ctx,
               'sendDocument',
@@ -730,6 +738,7 @@ export async function sendAgyResponseFile(ctx, filePath, deliveryOptions = undef
             ),
             signal,
           );
+          return recordContextTelegramResult(ctx, result);
         } finally {
           signal?.removeEventListener('abort', onAbort);
           await closeStream(stream);
