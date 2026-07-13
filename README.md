@@ -2,11 +2,19 @@
 
 [한국어](README.ko.md) · [Latest release](https://github.com/parkjangwon/agygram/releases/latest) · [Install details](docs/MANAGED_INSTALL.md)
 
-Run Google Antigravity CLI (`agy`) from Telegram on macOS, Linux, or Windows. It is built for headless servers: no IDE, no desktop session for daily use, and first authentication happens from Telegram.
+Run Google Antigravity CLI (`agy`) from Telegram on macOS, Linux, or Windows.
 
-## Quick Start
+agygram is for the “I have a server, an `agy` CLI, and I want to drive it from my phone” workflow: no IDE, no daily desktop session, and first OAuth authentication from Telegram.
 
-Before you start, create a Telegram bot with [@BotFather](https://t.me/BotFather), keep the bot token ready, and make sure `agy` works for the same OS user.
+## 3-minute setup
+
+You need three things:
+
+1. A Telegram bot token from [@BotFather](https://t.me/BotFather).
+2. Node.js 22 or 24.
+3. `agy` installed and working for the same OS user that will run agygram.
+
+Then run the installer for your OS.
 
 macOS or Linux:
 
@@ -20,13 +28,30 @@ Windows PowerShell:
 & { $ErrorActionPreference = 'Stop'; $d = Join-Path ([IO.Path]::GetTempPath()) ("agygram-install-{0}" -f [Guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $d | Out-Null; $f = Join-Path $d 'install.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 -Uri 'https://github.com/parkjangwon/agygram/releases/latest/download/install.ps1' -OutFile $f; powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $f --setup; Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
 ```
 
-The setup wizard will:
+The command is long on purpose: it downloads the installer into a private temporary file, checks it, and then runs it. No `curl | sh`.
 
-1. Ask for your Telegram bot token.
-2. Ask you to send `/start` to the bot, then auto-detect your private chat ID and owner user ID.
-3. Find `agy`, write a private `.env`, create data/workspace directories, and install the native user service when the platform checks pass.
+The wizard will ask for your bot token, ask you to send `/start` to the bot, auto-detect your private chat/user IDs, find `agy`, write a private config, and install a user-level background service when the platform checks pass.
 
-Then open Telegram and send `/auth` or `/menu` to the bot. The menu is button-first: authentication, model/agent/skill selection, execution mode, status, update checks, and result recovery are reachable without memorizing commands. During OAuth the bot shows only the useful URL/code prompts and hides Antigravity TUI noise.
+Then open Telegram:
+
+1. Send `/menu`.
+2. Tap `🔐 Auth`.
+3. Open the OAuth URL, paste the authorization code back into Telegram.
+4. Send a normal message and let `agy` work.
+
+Success looks like this:
+
+- `/menu` shows a button panel.
+- `/info` shows the running agygram version.
+- `/auth` sends only the useful URL/code prompts, not the noisy Antigravity terminal UI.
+
+If you are handing this repo to another coding agent on a remote server, this prompt is usually enough:
+
+```text
+Install agygram from https://github.com/parkjangwon/agygram.
+Use the managed installer, configure my Telegram bot token, start the user service,
+then verify from Telegram that /menu opens and /auth starts headless OAuth.
+```
 
 ## What You Get
 
@@ -48,6 +73,8 @@ agygram setup
 ```
 
 Rerun the same install command any time to update or repair the managed installation. Owners can also use `/update` and `/update apply` in Telegram from a managed release install or a clean source checkout.
+
+To uninstall while keeping your config, runtime data, workspace, and Antigravity credentials, use the matching uninstaller from [Install details](docs/MANAGED_INSTALL.md#uninstall).
 
 ## Telegram Commands
 

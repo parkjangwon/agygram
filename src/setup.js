@@ -237,10 +237,10 @@ function latestPrivateUpdate(updates) {
 }
 
 async function discoverTelegramIds(token, rl) {
-  process.stdout.write('\nTelegram ID auto-detect\n');
-  process.stdout.write('1. Open your bot in Telegram.\n');
-  process.stdout.write('2. Send /start to the bot from the private chat you want to allow.\n');
-  await rl.question('Press Enter after sending /start...');
+  process.stdout.write('\nStep 2/3: connect your private Telegram chat\n');
+  process.stdout.write('1. Open your new bot in Telegram.\n');
+  process.stdout.write('2. Send /start from the private chat you want to allow.\n');
+  await rl.question('Press Enter here after sending /start...');
   let offset = 0;
   for (let attempt = 0; attempt < 6; attempt += 1) {
     let updates;
@@ -305,6 +305,7 @@ async function runSetup(options, { projectDir = process.cwd() } = {}) {
   let rl;
   try {
     process.stdout.write(`agygram setup\nConfig: ${configFile}\n\n`);
+    process.stdout.write('Step 1/3: Telegram bot token\n');
     let botToken = parsed.BOT_TOKEN?.trim();
     if (!botToken) botToken = await promptSecret('Paste Telegram bot token from @BotFather: ');
     if (!SECRET_RE.test(botToken)) throw new Error('BOT_TOKEN does not look like a Telegram bot token');
@@ -332,6 +333,7 @@ async function runSetup(options, { projectDir = process.cwd() } = {}) {
     const dataDir = path.resolve(options.dataDir || parsed.DATA_DIR || defaultDataDir());
     const workspaceDir = path.resolve(options.workspaceDir || parsed.WORKSPACE_DIR || defaultWorkspaceDir());
 
+    process.stdout.write('\nStep 3/3: write config and prepare workspace\n');
     text = setEnvValue(text, 'BOT_TOKEN', botToken);
     text = setEnvValue(text, 'ALLOWED_CHAT_IDS', allowedChatIds);
     text = setEnvValue(text, 'OWNER_USER_IDS', ownerUserIds);
@@ -354,7 +356,12 @@ async function runSetup(options, { projectDir = process.cwd() } = {}) {
         'Windows: review the config/data ACLs, then set WINDOWS_ACL_VERIFIED=true before service install.\n',
       );
     }
-    process.stdout.write('Next: start or update the managed service with the installer, then use /auth in Telegram.\n');
+    process.stdout.write('\nSetup complete.\n');
+    process.stdout.write('Next steps:\n');
+    process.stdout.write('1. If you ran the managed installer, let it finish installing/restarting the service.\n');
+    process.stdout.write('2. Open Telegram and send /menu.\n');
+    process.stdout.write('3. Tap Auth, or send /auth, to finish headless OAuth.\n');
+    process.stdout.write('4. Send a normal message to start using agy from Telegram.\n');
     return { configFile, dataDir, workspaceDir, agyBin };
   } finally {
     rl?.close();
