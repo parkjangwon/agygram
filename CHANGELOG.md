@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8 — 2026-07-13
+
+- Add a Telegram `닫기` button to action panels such as `/menu`, `/help`,
+  `/info`, `/status`, `/jobs`, auth status, and update prompts. The button
+  deletes the bot menu message when Telegram permits it.
+
 ## 0.3.7 — 2026-07-13
 
 - Keep the new `/auth` preflight tests aligned with Windows executable policy;

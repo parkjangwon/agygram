@@ -761,7 +761,11 @@ async function main() {
     });
   };
 
-  const actionKeyboard = (rows) => ({ reply_markup: buildActionKeyboard(rows) });
+  const withCloseRow = (rows) => {
+    const hasClose = rows.some((row) => row.some((button) => button.action === 'close'));
+    return hasClose ? rows : [...rows, [{ label: '닫기', action: 'close' }]];
+  };
+  const actionKeyboard = (rows) => ({ reply_markup: buildActionKeyboard(withCloseRow(rows)) });
   const mainMenuRows = () => [
     [
       { label: '📊 상태', action: 'status' },
@@ -1645,6 +1649,10 @@ async function main() {
     switch (action) {
       case 'menu':
         await sendMainMenu(ctx, { edit: true });
+        return;
+      case 'close':
+        await ctx.deleteMessage().catch(() =>
+          ctx.editMessageText('메뉴를 닫았습니다.').catch(() => {}));
         return;
       case 'info':
         await sendSessionInfo(ctx, { edit: true });
