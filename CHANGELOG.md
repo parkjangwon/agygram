@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.12 — 2026-07-13
+
+- Improve first-run onboarding in the English and Korean READMEs with a
+  clearer 3-minute setup path, success checklist, and copy/paste prompt for
+  remote coding agents.
+- Make the interactive setup wizard show explicit steps and Telegram next
+  actions after configuration is saved.
+
 ## 0.3.11 — 2026-07-13
 
 - Make `/clear` sweep a much wider private-chat message range so older
