@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16 — 2026-07-19
+
+- Fix release CI failure by extending the service `.env` allowlist to include the new version-guard and queue-overload configuration keys.
+
 ## 0.3.15 — 2026-07-19
 
 - Add startup agy version compatibility guardrails with warn-first defaults, plus configurable strict enforcement.
