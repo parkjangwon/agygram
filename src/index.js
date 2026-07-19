@@ -345,6 +345,7 @@ async function main() {
     secrets: [config.botToken],
   });
   await jobs.init();
+  const recoveryCandidates = jobs.restartRecoveryCandidates();
   const recovery = await reconcileCrossStoreRecovery({ jobs, state, results });
   if (recovery.candidates > 0) {
     console.warn('Reconciled interrupted jobs after restart', recovery);
@@ -1841,6 +1842,36 @@ async function main() {
     return handoff.job;
   };
 
+  const executeRetry = async (ctx, requested, confirmation) => {
+    const candidates = jobs
+      .listForSession(sessionKey(ctx), { limit: 100 })
+      .filter((job) => ['failed', 'cancelled', 'interrupted'].includes(job.status))
+      .filter((job) => job.id === requested || job.id.startsWith(requested));
+    if (candidates.length !== 1) {
+      await ctx.reply(candidates.length === 0 ? '재시도 가능한 작업을 찾지 못했습니다.' : '작업ID가 모호합니다. 더 길게 입력하세요.');
+      return;
+    }
+    const mutating =
+      candidates[0].kind === 'apply' ||
+      candidates[0].payload?.executionContext?.mode === 'accept-edits';
+    if (mutating && normalizeChoice(confirmation || '') !== 'confirm') {
+      const idPrefix = candidates[0].id.slice(0, 8);
+      const text = `이 작업은 중단 전에 파일을 일부 변경했을 수 있습니다. 작업공간의 git diff/status를 먼저 확인한 뒤 /retry ${idPrefix} confirm 으로 명시 승인하세요.`;
+      await ctx.reply(text, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✓ 명시 승인 및 재시도', callback_data: `tg:confirm-${idPrefix}` },
+              { text: '닫기', callback_data: 'tg:close' }
+            ]
+          ]
+        }
+      });
+      return;
+    }
+    await scheduleAgyRequest(ctx, candidates[0].payload, { retryJob: candidates[0] });
+  };
+
   // Authorization is deliberately the first middleware. Unknown chats receive no response.
   bot.use(async (ctx, next) => {
     guardTelegramClient(ctx.telegram);
@@ -1940,6 +1971,16 @@ async function main() {
       return;
     }
     await acknowledgeChoice(ctx, '처리 중...');
+    if (action.startsWith('retry-')) {
+      const jobId = action.slice(6);
+      await executeRetry(ctx, jobId, '');
+      return;
+    }
+    if (action.startsWith('confirm-')) {
+      const jobId = action.slice(8);
+      await executeRetry(ctx, jobId, 'confirm');
+      return;
+    }
     switch (action) {
       case 'menu':
         await sendMainMenu(ctx, { edit: true });
@@ -2144,24 +2185,7 @@ async function main() {
       await ctx.reply('사용법: /retry <작업ID> — /jobs 에 표시된 실패·취소·중단 작업만 재시도합니다.');
       return;
     }
-    const candidates = jobs
-      .listForSession(sessionKey(ctx), { limit: 100 })
-      .filter((job) => ['failed', 'cancelled', 'interrupted'].includes(job.status))
-      .filter((job) => job.id === requested || job.id.startsWith(requested));
-    if (candidates.length !== 1) {
-      await ctx.reply(candidates.length === 0 ? '재시도 가능한 작업을 찾지 못했습니다.' : '작업ID가 모호합니다. 더 길게 입력하세요.');
-      return;
-    }
-    const mutating =
-      candidates[0].kind === 'apply' ||
-      candidates[0].payload?.executionContext?.mode === 'accept-edits';
-    if (mutating && normalizeChoice(confirmation || '') !== 'confirm') {
-      await ctx.reply(
-        `이 작업은 중단 전에 파일을 일부 변경했을 수 있습니다. 작업공간의 git diff/status를 먼저 확인한 뒤 /retry ${candidates[0].id.slice(0, 8)} confirm 으로 명시 승인하세요.`,
-      );
-      return;
-    }
-    await scheduleAgyRequest(ctx, candidates[0].payload, { retryJob: candidates[0] });
+    await executeRetry(ctx, requested, confirmation);
   });
 
   bot.command('plan', async (ctx) => {
@@ -2637,6 +2661,52 @@ async function main() {
     }
   });
 
+  const sendRecoveryNotifications = async (tgBot, candidatesList, jobStore) => {
+    if (!candidatesList || candidatesList.length === 0) return;
+    for (const job of candidatesList) {
+      const chatId = job.sessionKey;
+      const idPrefix = job.id.slice(0, 8);
+      const isMutating =
+        job.kind === 'apply' ||
+        job.payload?.executionContext?.mode === 'accept-edits';
+      
+      const parts = chatId.split(':');
+      const rawChatId = parts[0];
+      const threadId = parts[1] ? Number(parts[1]) : undefined;
+      const extraOptions = threadId ? { message_thread_id: threadId } : {};
+
+      // Check the final status in the store
+      const persisted = jobStore.get(job.id);
+      if (persisted && persisted.status === 'succeeded') {
+        await tgBot.telegram.sendMessage(
+          rawChatId,
+          `🔔 시스템 재시작 전 실행 중이던 작업(${idPrefix})이 성공적으로 복구 및 완료되었습니다.\n/last 명령어로 결과를 확인하세요.`,
+          extraOptions
+        ).catch((err) => console.error(`Failed to send recovery success notification to ${chatId}`, err));
+      } else {
+        const text = `⚠️ 시스템 재시작으로 인해 실행 중이던 작업(${idPrefix})이 중단되었습니다.`;
+        const callbackData = isMutating ? `tg:confirm-${idPrefix}` : `tg:retry-${idPrefix}`;
+        const btnText = isMutating ? '✓ 명시 승인 및 재시도' : '🔄 작업 다시 실행';
+        
+        await tgBot.telegram.sendMessage(
+          rawChatId,
+          text,
+          {
+            ...extraOptions,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: btnText, callback_data: callbackData },
+                  { text: '닫기', callback_data: 'tg:close' }
+                ]
+              ]
+            }
+          }
+        ).catch((err) => console.error(`Failed to send recovery failure notification to ${chatId}`, err));
+      }
+    }
+  };
+
   const lifecycle = new LifecycleController({ bot, tasks, auth, admissions });
   runtimeLifecycle = lifecycle;
   serviceStopMonitor?.setHandler((reason) => lifecycle.requestStop(reason));
@@ -2650,6 +2720,14 @@ async function main() {
       launchOptions: { dropPendingUpdates: false },
       onLaunch: () => {
         console.log(`Antigravity Telegram bot started with agy at ${agyExecutable}`);
+        void (async () => {
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await sendRecoveryNotifications(bot, recoveryCandidates, jobs);
+          } catch (err) {
+            console.error('Error sending startup recovery notifications', err);
+          }
+        })();
       },
     });
   } finally {

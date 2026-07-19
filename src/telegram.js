@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 
 const TELEGRAM_TEXT_LIMIT = 4_096;
 const SAFE_CHUNK_SIZE = 3_800;
@@ -491,6 +492,10 @@ async function deliverParts({ transport, parts, deliver, deliveryOptions }) {
   let retries = 0;
   let duplicateRisk = false;
   for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) {
+      // Throttle/Delay between chunks to defend against Telegram Rate Limits (Flood limits)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
     try {
       const report = await retryTelegramCall((signal) => deliver(parts[index], index, signal), {
         ...deliveryRetryOptions(deliveryOptions),
@@ -606,6 +611,18 @@ function recordContextTelegramResult(ctx, result) {
 }
 
 export async function replyLong(ctx, text, extra = undefined, deliveryOptions = undefined) {
+  const match = text.match(/\/retry\s+([0-9a-f]{8,32})(?:\s+(confirm))?/i);
+  if (match) {
+    const id = match[1];
+    const confirm = match[2];
+    const button = confirm
+      ? { text: '✓ 명시 승인 및 재시도', callback_data: `tg:confirm-${id}` }
+      : { text: '🔄 작업 재시도', callback_data: `tg:retry-${id}` };
+    extra = { ...(extra || {}) };
+    extra.reply_markup = { ...(extra.reply_markup || {}) };
+    extra.reply_markup.inline_keyboard = [...(extra.reply_markup.inline_keyboard || [])];
+    extra.reply_markup.inline_keyboard.push([button]);
+  }
   const chunks = splitTelegramText(text);
   return deliverParts({
     transport: 'reply',
@@ -632,6 +649,18 @@ export async function sendLong(
   lastExtra = undefined,
   deliveryOptions = undefined,
 ) {
+  const match = text.match(/\/retry\s+([0-9a-f]{8,32})(?:\s+(confirm))?/i);
+  if (match) {
+    const id = match[1];
+    const confirm = match[2];
+    const button = confirm
+      ? { text: '✓ 명시 승인 및 재시도', callback_data: `tg:confirm-${id}` }
+      : { text: '🔄 작업 재시도', callback_data: `tg:retry-${id}` };
+    lastExtra = { ...(lastExtra || {}) };
+    lastExtra.reply_markup = { ...(lastExtra.reply_markup || {}) };
+    lastExtra.reply_markup.inline_keyboard = [...(lastExtra.reply_markup.inline_keyboard || [])];
+    lastExtra.reply_markup.inline_keyboard.push([button]);
+  }
   const chunks = splitTelegramText(text);
   return deliverParts({
     transport: 'sendMessage',
@@ -682,6 +711,17 @@ export async function sendAgyResponse(
 }
 
 export async function sendAgyResponseFile(ctx, filePath, deliveryOptions = undefined) {
+  try {
+    const stats = await stat(filePath).catch(() => null);
+    if (stats && stats.size > 48 * 1024 * 1024) {
+      const sizeMb = (stats.size / (1024 * 1024)).toFixed(1);
+      const text = `⚠️ 결과 파일 크기(${sizeMb} MB)가 텔레그램 Bot API 전송 제한(50MB)을 초과합니다.\n결과물이 서버 로컬 경로에 저장되었으니 직접 확인해 주세요:\n\`${filePath}\``;
+      return await replyLong(ctx, text, undefined, deliveryOptions);
+    }
+  } catch (error) {
+    console.warn('File size check failed', error);
+  }
+
   const streams = new Set();
   const closing = new WeakMap();
   const closeStream = (stream) => {

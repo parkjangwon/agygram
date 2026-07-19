@@ -22,6 +22,7 @@ module.exports = {
       error_file: nullDevice,
       env: {
         NODE_ENV: 'production',
+        NODE_OPTIONS: '--require /home/pjw/antigravity-telegram-cli/dns-ipv4-preload.cjs',
       },
     },
   ],
