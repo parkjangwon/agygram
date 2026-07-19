@@ -1,15 +1,15 @@
-import { access, constants, lstat, mkdir } from 'node:fs/promises';
-import path from 'node:path';
+import { lstat } from 'node:fs/promises';
 import dotenv from 'dotenv';
 
 import { AgyClient } from './agy.js';
 import { loadConfig } from './config.js';
 import { buildAgyEnvironment } from './environment.js';
-import { resolveProcessExecutable } from './process-platform.js';
 import {
-  assertManagedStorageBoundary,
-  assertRuntimeFilesystemTrust,
-} from './runtime-trust.js';
+  assertManagedRuntimeTrust,
+  ensureManagedDataLayout,
+} from './managed-runtime.js';
+import { resolveProcessExecutable } from './process-platform.js';
+import { assertRuntimeFilesystemTrust } from './runtime-trust.js';
 import {
   parseFileRunnerArguments,
   resolveRuntimeEnvFile,
@@ -92,40 +92,18 @@ async function doctor() {
   }
   if (!config) return print(checks);
 
-  const managedDataFiles = [config.stateFile, config.jobFile, config.usageFile];
-  const managedDataDirectories = [...new Set([
-    config.dataDir,
-    ...managedDataFiles.map((file) => path.dirname(file)),
-    config.uploadsDir,
-    config.resultsDir,
-    config.agyRunLogDir,
-    path.join(config.dataDir, 'logs'),
-    path.join(config.dataDir, 'runtime', 'service'),
-  ])];
-  await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
-  await assertManagedStorageBoundary({
-    dataDir: config.dataDir,
-    files: managedDataFiles,
-    directories: managedDataDirectories,
-  });
-  await Promise.all([
-    ...managedDataDirectories
-      .filter((directory) => directory !== config.dataDir)
-      .map((directory) => mkdir(directory, { recursive: true, mode: 0o700 })),
-    mkdir(config.workspaceDir, { recursive: true, mode: 0o700 }),
-  ]);
+  let managedDataFiles;
+  let managedDataDirectories;
   try {
-    await access(config.dataDir, constants.R_OK | constants.W_OK);
-    await assertManagedStorageBoundary({
-      dataDir: config.dataDir,
-      files: managedDataFiles,
-      directories: managedDataDirectories,
-    });
-    await assertRuntimeFilesystemTrust({
+    ({ managedDataFiles, managedDataDirectories } = await ensureManagedDataLayout(config, {
+      createWorkspace: true,
+      assertDataDirWritable: true,
+    }));
+    await assertManagedRuntimeTrust({
+      config,
       envFile: runtimeEnvFile,
-      dataDirectories: managedDataDirectories,
-      dataFiles: managedDataFiles,
-      windowsAclVerified: config.windowsAclVerified,
+      managedDataFiles,
+      managedDataDirectories,
     });
     const info = await lstat(config.dataDir);
     const privateMode = process.platform === 'win32'

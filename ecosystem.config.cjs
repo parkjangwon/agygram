@@ -2,6 +2,23 @@ const path = require('node:path');
 
 const root = __dirname;
 const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
+const dnsPreload = path.join(root, 'dns-ipv4-preload.cjs');
+
+// Optional IPv4-only DNS workaround for broken IPv6 routes to Telegram.
+// Enable with AGYGRAM_DNS_IPV4=1 (or "true"/"yes") in the process environment.
+const enableDnsIpv4 = /^(1|true|yes)$/i.test(String(process.env.AGYGRAM_DNS_IPV4 || ''));
+
+const env = {
+  NODE_ENV: 'production',
+};
+
+if (enableDnsIpv4) {
+  const existing = process.env.NODE_OPTIONS || '';
+  const requireFlag = `--require ${dnsPreload}`;
+  env.NODE_OPTIONS = existing.includes(dnsPreload)
+    ? existing
+    : [existing, requireFlag].filter(Boolean).join(' ').trim();
+}
 
 module.exports = {
   apps: [
@@ -20,10 +37,7 @@ module.exports = {
       // Discard PM2's duplicate unbounded console files.
       out_file: nullDevice,
       error_file: nullDevice,
-      env: {
-        NODE_ENV: 'production',
-        NODE_OPTIONS: '--require /home/pjw/antigravity-telegram-cli/dns-ipv4-preload.cjs',
-      },
+      env,
     },
   ],
 };

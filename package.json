@@ -1,6 +1,6 @@
 {
   "name": "agygram",
-  "version": "3.1.9",
+  "version": "3.1.10",
   "description": "Headless, cross-platform Telegram controller for Google Antigravity CLI",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,7 @@
     ".env.example",
     "npm-shrinkwrap.json",
     "ecosystem.config.cjs",
+    "dns-ipv4-preload.cjs",
     "README.md",
     "README.ko.md",
     "CHANGELOG.md",

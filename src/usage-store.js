@@ -1,6 +1,8 @@
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+
+import { atomicWriteJson } from './atomic-write.js';
 
 const SCHEMA_VERSION = 1;
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -47,37 +49,6 @@ function dayMilliseconds(day) {
     throw new TypeError('day must be a valid UTC calendar day');
   }
   return milliseconds;
-}
-
-async function syncDirectoryBestEffort(directory) {
-  let handle;
-  try {
-    handle = await open(directory, 'r');
-    await handle.sync();
-  } catch {
-    // Some Windows/filesystem combinations cannot fsync a directory. The file
-    // itself was fsynced before rename, which is the strongest portable contract.
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
-
-async function atomicWriteJson(file, data) {
-  const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  let handle;
-  try {
-    handle = await open(temporary, 'wx', 0o600);
-    await handle.writeFile(`${JSON.stringify(data, null, 2)}\n`, 'utf8');
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await rename(temporary, file);
-    await syncDirectoryBestEffort(path.dirname(file));
-  } catch (error) {
-    await handle?.close().catch(() => {});
-    await rm(temporary, { force: true }).catch(() => {});
-    throw error;
-  }
 }
 
 export class UsageLimitError extends Error {

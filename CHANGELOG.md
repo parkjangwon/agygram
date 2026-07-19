@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.10 — 2026-07-19
+
+- Internal cleanup: split the Telegram bot orchestration out of `src/index.js` into `src/bot/{app,control,panels,jobs,handlers,util}.js`.
+- Share atomic file writes (`src/atomic-write.js`) and managed DATA_DIR layout (`src/managed-runtime.js`) across stores, doctor, and bot startup.
+- Route Windows argv quoting through `process-platform.js` instead of a second copy in `agy.js`.
+- Merge `tests/` into `test/`; ship a path-safe optional PM2 DNS IPv4 workaround (`dns-ipv4-preload.cjs`, `AGYGRAM_DNS_IPV4=1`) and remove the incomplete `dns-ipv4-fix.mjs` experiment plus hardcoded host paths in `ecosystem.config.cjs`.
+
 ## 3.1.9 — 2026-07-19
 
 - Fix release CI by removing a stale hardcoded version literal from `test/version.test.js`; the test now validates strict SemVer and cross-file version consistency without per-release test edits.

@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
-import { open, lstat, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+
+import { atomicWriteFile } from './atomic-write.js';
 
 const SAFE_ID = /^[0-9a-f-]{8,64}$/i;
 const RESULT_FILE = /^([0-9a-f-]{8,64})\.txt$/i;
 const RESULT_TEMP_FILE = /^([0-9a-f-]{8,64})\.txt\.\d+\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.part$/i;
+// Crash temps written before UUID-scoped names; kept so cleanup still reclaims them.
 const LEGACY_RESULT_TEMP_FILE = /^([0-9a-f-]{8,64})\.txt\.\d+\.part$/i;
 
 export function isResultTemporaryFileName(name) {
@@ -18,34 +20,9 @@ function resultPath(directory, jobId) {
   return path.join(directory, `${id}.txt`);
 }
 
-async function syncDirectoryBestEffort(directory) {
-  let handle;
-  try {
-    handle = await open(directory, 'r');
-    await handle.sync();
-  } catch {
-    // Opening or syncing a directory is unsupported on Windows and on some
-    // filesystems. The file itself is still fsynced before the atomic rename.
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
-
 async function atomicWrite(file, text) {
-  const temporary = `${file}.${process.pid}.${randomUUID()}.part`;
-  let handle;
-  try {
-    handle = await open(temporary, 'wx', 0o600);
-    await handle.writeFile(text, 'utf8');
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await rename(temporary, file);
-    await syncDirectoryBestEffort(path.dirname(file));
-  } finally {
-    await handle?.close().catch(() => {});
-    await rm(temporary, { force: true }).catch(() => {});
-  }
+  // Use .part so incomplete writes match RESULT_TEMP_FILE cleanup patterns.
+  return atomicWriteFile(file, text, { extension: '.part' });
 }
 
 export class ResultStore {

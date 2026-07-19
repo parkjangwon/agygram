@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { atomicWriteFile } from './atomic-write.js';
 import { normalizeTrackedTelegramMessages } from './telegram-cleanup.js';
 
 const SCHEMA_VERSION = 2;
@@ -45,19 +46,6 @@ function executionStateChanged(current, next) {
 
 function clone(value) {
   return structuredClone(value);
-}
-
-async function syncDirectoryBestEffort(directory) {
-  let handle;
-  try {
-    handle = await open(directory, 'r');
-    await handle.sync();
-  } catch {
-    // Opening or syncing a directory is unsupported on Windows and on some
-    // filesystems. The file itself is still fsynced before the atomic rename.
-  } finally {
-    await handle?.close().catch(() => {});
-  }
 }
 
 function normalizeHistory(history) {
@@ -322,7 +310,6 @@ export class StateStore {
   }
 
   async #persist(data = this.#data) {
-    const temp = `${this.#file}.${process.pid}.${randomUUID()}.tmp`;
     const contents = serializedState(data);
     const bytes = Buffer.byteLength(contents, 'utf8');
     if (bytes > this.#maxBytes) {
@@ -330,19 +317,7 @@ export class StateStore {
       error.code = 'STATE_SIZE_LIMIT';
       throw error;
     }
-    let handle;
-    try {
-      handle = await open(temp, 'wx', 0o600);
-      await handle.writeFile(contents, 'utf8');
-      await handle.sync();
-      await handle.close();
-      handle = null;
-      await rename(temp, this.#file);
-      await syncDirectoryBestEffort(path.dirname(this.#file));
-    } finally {
-      await handle?.close().catch(() => {});
-      await rm(temp, { force: true }).catch(() => {});
-    }
+    await atomicWriteFile(this.#file, contents);
   }
 
   #limitLoadedSessions(data, now = Date.now()) {

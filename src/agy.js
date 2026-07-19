@@ -5,13 +5,20 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { stripVTControlCharacters } from 'node:util';
 
+import {
+  assertWindowsCommandLineSupported,
+  DEFAULT_WINDOWS_SAFE_COMMAND_LINE_UNITS,
+  estimateWindowsCommandLineUnits as estimatePlatformWindowsCommandLineUnits,
+  quoteWindowsArgument,
+} from './process-platform.js';
+
 const AUTH_PATTERN =
   /not signed in|sign[ -]?in required|authentication required|authenticate|select login method|oauth|authorization url/i;
 
 const DEFAULT_RUN_LOG_READ_BYTES = 256 * 1024;
 const DEFAULT_RUN_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 const DEFAULT_RUN_LOG_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
-const DEFAULT_WINDOWS_COMMAND_LINE_UNITS = 30_000;
+const DEFAULT_WINDOWS_COMMAND_LINE_UNITS = DEFAULT_WINDOWS_SAFE_COMMAND_LINE_UNITS;
 const RUN_LOG_NAME = /^\d+-[0-9a-f-]{36}\.log$/i;
 const activeRunLogs = new Set();
 const POSIX_PS_PATH = '/bin/ps';
@@ -283,29 +290,8 @@ function forceCapturedPosixTree(
   }
 }
 
-function quoteWindowsArgument(value) {
-  const argument = String(value);
-  if (argument && !/[\s"]/u.test(argument)) return argument;
-
-  let quoted = '"';
-  let backslashes = 0;
-  for (const character of argument) {
-    if (character === '\\') {
-      backslashes += 1;
-      continue;
-    }
-    if (character === '"') {
-      quoted += '\\'.repeat(backslashes * 2 + 1) + '"';
-    } else {
-      quoted += '\\'.repeat(backslashes) + character;
-    }
-    backslashes = 0;
-  }
-  return quoted + '\\'.repeat(backslashes * 2) + '"';
-}
-
 export function estimateWindowsCommandLineUnits(bin, args = []) {
-  return [bin, ...args].map(quoteWindowsArgument).join(' ').length + 1;
+  return estimatePlatformWindowsCommandLineUnits(bin, args);
 }
 
 export function assertArgvSupported(
@@ -314,12 +300,25 @@ export function assertArgvSupported(
   { platform = process.platform, maxWindowsUnits = DEFAULT_WINDOWS_COMMAND_LINE_UNITS } = {},
 ) {
   if (platform !== 'win32') return;
-  const units = estimateWindowsCommandLineUnits(bin, args);
-  if (units > maxWindowsUnits) {
-    throw new AgyError(
-      `agy command exceeds the safe Windows command-line limit (${units} UTF-16 units; limit ${maxWindowsUnits})`,
-      { code: 'AGY_ARGV_LIMIT' },
-    );
+  try {
+    assertWindowsCommandLineSupported(bin, args, {
+      platform,
+      maxUnits: maxWindowsUnits,
+    });
+  } catch (error) {
+    if (error?.code === 'WINDOWS_COMMAND_LINE_LIMIT') {
+      const match = String(error.message).match(/\((\d+) UTF-16 units; limit (\d+)\)/u);
+      const units = match?.[1] ?? '?';
+      const limit = match?.[2] ?? maxWindowsUnits;
+      throw new AgyError(
+        `agy command exceeds the safe Windows command-line limit (${units} UTF-16 units; limit ${limit})`,
+        { code: 'AGY_ARGV_LIMIT', cause: error },
+      );
+    }
+    throw new AgyError(error?.message || 'agy command arguments are invalid on Windows', {
+      code: 'AGY_ARGV_LIMIT',
+      cause: error,
+    });
   }
 }
 

@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-const roots = ['src', 'bin', 'scripts', 'test', 'tests'];
+const roots = ['src', 'bin', 'scripts', 'test'];
 const files = [];
 
 async function collect(directory) {

@@ -263,6 +263,24 @@ If logs report `JOB_UPDATE_LEDGER_FULL`, polling deliberately stops without conf
 
 Only one bot process may use a data directory. `data/bot.lock` rejects an accidental manual-plus-service duplicate and reclaims a verifiably stale owner. Do not deploy the same data directory as active/active storage across machines.
 
+## Optional PM2 and IPv4 DNS workaround
+
+Native launchd/systemd/Task Scheduler install is preferred. For operators who still use PM2, the checkout ships `ecosystem.config.cjs` pointed at `src/service/file-runner.js`.
+
+If the host can reach Telegram only over IPv4 (broken IPv6 routes to `api.telegram.org`), enable the optional preload:
+
+```text
+AGYGRAM_DNS_IPV4=1 pm2 start ecosystem.config.cjs
+```
+
+Or without PM2:
+
+```text
+NODE_OPTIONS="--require ./dns-ipv4-preload.cjs" node src/index.js
+```
+
+Leave this off on healthy dual-stack networks. Verbose logging is available with `AGYGRAM_DNS_IPV4_VERBOSE=1`.
+
 ## Observability limits
 
 The current headless print integration does not expose a documented structured stream of live tool events. `/status` is limited to bot-observed phases and the process can appear as `running-agy` for most of a long request. Typing indicators are liveness hints. Logs and status must not be interpreted as token-level, tool-level, or percentage progress telemetry.

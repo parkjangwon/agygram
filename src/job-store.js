@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { atomicWriteJson } from './atomic-write.js';
+
 const SCHEMA_VERSION = 2;
+/** @deprecated Migrated on load; retained for journals written before schema v2. */
 const LEGACY_SCHEMA_VERSION = 1;
 const DEFAULT_UPDATE_TOMBSTONE_RETENTION_MS = 48 * 60 * 60 * 1_000;
 const DEFAULT_MAX_UPDATE_TOMBSTONES = 10_000;
@@ -221,37 +224,6 @@ function failureFallback(status) {
   if (status === 'cancelled') return 'Job was cancelled';
   if (status === 'interrupted') return 'Job was interrupted by process shutdown';
   return 'Job failed';
-}
-
-async function syncDirectoryBestEffort(directory) {
-  let handle;
-  try {
-    handle = await open(directory, 'r');
-    await handle.sync();
-  } catch {
-    // Directory fsync is unavailable on some platforms/filesystems. The file itself
-    // was fsynced before rename, so retaining cross-platform support is preferable.
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
-
-async function atomicWriteJson(file, data) {
-  const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  let handle;
-  try {
-    handle = await open(temporary, 'wx', 0o600);
-    await handle.writeFile(`${JSON.stringify(data, null, 2)}\n`, 'utf8');
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await rename(temporary, file);
-    await syncDirectoryBestEffort(path.dirname(file));
-  } catch (error) {
-    await handle?.close().catch(() => {});
-    await rm(temporary, { force: true }).catch(() => {});
-    throw error;
-  }
 }
 
 /**
